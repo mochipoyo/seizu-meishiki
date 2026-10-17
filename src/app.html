@@ -128,6 +128,22 @@ tr.now td { background: var(--gold-soft) }
 .btn2 { font: inherit; font-size: 14px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--indigo); background: var(--paper); color: var(--indigo); cursor: pointer }
 .btn2.primary { background: var(--indigo); color: var(--paper) }
 .btn2:disabled { opacity: .45; cursor: default }
+.tspread { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; padding: 8px 0 }
+.tgrid { display: grid; gap: 12px; justify-content: center; padding: 8px 0 }
+.tslot { display: grid; justify-items: center; gap: 4px; position: relative; min-width: 0 }
+.tslot .pl { font-size: 11px; color: var(--ink-2); text-align: center; max-width: 92px; line-height: 1.35 }
+.tcard { width: clamp(62px, 17vw, 92px); aspect-ratio: 3 / 5; border-radius: 8px; border: 1.5px solid var(--line); background: var(--paper); display: grid; place-items: center; cursor: pointer; padding: 0; font: inherit; color: var(--ink); position: relative; overflow: hidden; max-width: 100% }
+.tcard.back { background: repeating-linear-gradient(45deg, var(--indigo) 0 6px, var(--indigo-soft) 6px 12px); border-color: var(--indigo) }
+.tcard.back::after { content: ""; position: absolute; inset: 8px; border: 1.5px solid var(--gold); border-radius: 5px }
+.tcard .face { display: grid; justify-items: center; align-content: space-between; height: 100%; width: 100%; padding: 7px 4px; text-align: center }
+.tcard.rev .face { transform: rotate(180deg) }
+.tcard .num { font-family: var(--f-display); font-size: 12px; color: var(--gold); font-weight: 700 }
+.tcard .em { width: 60%; aspect-ratio: 1; border-radius: 50%; display: grid; place-content: center; font-family: var(--f-display); font-weight: 800; font-size: clamp(15px, 4vw, 22px); color: var(--paper) }
+.tcard .nm { font-size: clamp(9.5px, 2.4vw, 11.5px); font-weight: 700; line-height: 1.25 }
+.tcard.major { border-color: var(--gold) }
+.s-major { background: var(--gold) } .s-wands { background: var(--warn) } .s-cups { background: var(--indigo) } .s-swords { background: var(--mid) } .s-pentacles { background: var(--good) }
+.revtag { font-size: 10.5px; color: var(--warn); font-weight: 700 }
+@media (prefers-reduced-motion: no-preference) { .tcard { transition: transform .25s ease } .tcard.back:hover { transform: translateY(-3px) } }
 .foot { margin-top: 30px; font-size: 12px; color: var(--mid); max-width: 90ch }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease } }
 </style>
@@ -195,6 +211,7 @@ tr.now td { background: var(--gold-soft) }
 <script>/*DATA*/</script>
 <script>/*GENRE*/</script>
 <script>/*EKIKYO*/</script>
+<script>/*TAROT*/</script>
 <script>
 (function () {
 'use strict';
@@ -297,14 +314,14 @@ function synth(R) {
 }
 
 // ---------- 描画 ----------
-const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
+const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['tarot', 'タロット'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
 let current = 'sogo';
 try { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h)) current = h; } catch (e) { }
 
 function render(R) {
   const S = synth(R);
   const panes = {
-    sogo: paneSogo(R, S), eki: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
+    sogo: paneSogo(R, S), eki: '', tarot: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
     rokusei: paneRoku(R), gosei: paneGosei(R), num: paneNum(R), seimei: paneSeimei(R), shuku: paneShuku(R), basis: paneBasis(R)
   };
   $('out').innerHTML = `<div class="tabs" role="tablist">${TABS.map(([k, n]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${k === current}" data-k="${k}">${n}</button>`).join('')}</div>` +
@@ -312,7 +329,7 @@ function render(R) {
   $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); }));
   $('out').querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); $('tab-' + a.dataset.goto).click(); window.scrollTo({ top: $('out').offsetTop - 10 }); }));
   $('out').querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const el = $(a.dataset.jump); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
-  renderEki();
+  renderEki(); renderTarot();
   const st = $('strokeEdit'); if (st) st.addEventListener('change', e => { const c = e.target.dataset.c; if (c) { if (e.target.value) overrides[c] = +e.target.value; else delete overrides[c]; run(); } });
 }
 
@@ -462,6 +479,84 @@ function renderEki() {
   if (b2) b2.addEventListener('click', () => toss(6));
   if (b3) b3.addEventListener('click', () => { ekState.extra = true; renderEki(); });
   if (b4) b4.addEventListener('click', () => { ekState.extra = false; renderEki(); });
+}
+// ---------- タロット ----------
+const TA = window.Tarot;
+const ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
+let tState = { spread: 'three', cat: 'general', q: '', useRev: true, cards: null, open: [] };
+function tLoad() { try { return JSON.parse(localStorage.getItem('uranai-tarot') || '[]'); } catch (e) { return []; } }
+function tSave(list) { try { localStorage.setItem('uranai-tarot', JSON.stringify(list.slice(0, 30))); } catch (e) { } }
+function cardFace(c, open, idx) {
+  if (!open) return `<button type="button" class="tcard back" data-flip="${idx}" aria-label="${idx + 1}枚目をめくる"></button>`;
+  const k = TA.byId(c.id), cls = k.major ? 's-major' : 's-' + k.suit;
+  const em = k.major ? ROMAN[k.num] : TA.SUITS.find(s => s.key === k.suit).glyph;
+  const num = k.major ? '大アルカナ' : TA.RANKS[k.rank - 1];
+  return `<div class="tcard ${k.major ? 'major' : ''} ${c.rev ? 'rev' : ''}" role="img" aria-label="${k.name}${c.rev ? '（逆位置）' : ''}"><div class="face"><span class="num">${num}</span><span class="em ${cls}">${em}</span><span class="nm">${k.name}</span></div></div>`;
+}
+function slot(i, sp) {
+  const c = tState.cards[i], open = tState.open[i];
+  return `<div class="tslot">${cardFace(c, open, i)}<span class="pl">${i + 1}. ${sp.pos[i]}</span>${open && c.rev ? '<span class="revtag">逆位置</span>' : ''}</div>`;
+}
+function layoutHtml(sp, key) {
+  const n = sp.pos.length;
+  if (key === 'celtic') {
+    const cell = (i, r, col) => `<div style="grid-row:${r};grid-column:${col}">${slot(i, sp)}</div>`;
+    const cross = `<div style="grid-row:2;grid-column:2;display:flex;gap:8px;justify-content:center">${slot(0, sp)}${slot(1, sp)}</div>`;
+    return `<div style="overflow-x:auto"><div class="tgrid" style="grid-template-columns:repeat(4,auto)">${cell(4, 2, 1)}${cell(2, 1, 2)}${cross}${cell(3, 3, 2)}${cell(5, 2, 3)}${cell(9, 1, 4)}${cell(8, 2, 4)}${cell(7, 3, 4)}${cell(6, 4, 4)}</div></div>
+      <p class="hint" style="text-align:center">本来「2. 障害・課題」は1枚目の上に横向きに重ねて置くカードです。読みやすさのため横に並べています。</p>`;
+  }
+  if (key === 'choice') {
+    const cell = (i, r, col) => `<div style="grid-row:${r};grid-column:${col}">${slot(i, sp)}</div>`;
+    return `<div class="tgrid" style="grid-template-columns:repeat(3,auto)">${cell(3, 1, 1)}${cell(4, 1, 3)}${cell(1, 2, 1)}${cell(2, 2, 3)}${cell(0, 3, 2)}<div style="grid-row:1;grid-column:2;align-self:center" class="hint">A ／ B</div></div>`;
+  }
+  const offs = key === 'horseshoe' ? [60, 30, 0, 0, 0, 30, 60] : [];
+  return `<div class="tspread">${Array.from({ length: n }, (_, i) => `<div style="margin-top:${offs[i] || 0}px">${slot(i, sp)}</div>`).join('')}</div>`;
+}
+function tReading(rec) {
+  const sp = TA.SPREADS[rec.spread];
+  const lines = rec.cards.map((c, i) => ({ pos: sp.pos[i], c, ...TA.cardLine(c, rec.cat) }));
+  const sm = TA.summary(rec.cards);
+  const last = lines[lines.length - 1];
+  let concl = '';
+  if (rec.spread === 'one') concl = `答えは<b>${last.card.name}${last.c.rev ? '（逆位置）' : ''}</b>：${last.text}`;
+  else if (rec.spread === 'choice') concl = `A案の結果は<b>${lines[3].card.name}${lines[3].c.rev ? '（逆）' : ''}</b>（${lines[3].kw}）、B案の結果は<b>${lines[4].card.name}${lines[4].c.rev ? '（逆）' : ''}</b>（${lines[4].kw}）。キーワードを見比べ、自分が望む方向に近い方を選ぶのが二者択一の読み方です。`;
+  else concl = `最終的な流れは<b>${last.card.name}${last.c.rev ? '（逆位置）' : ''}</b>：${last.text}`;
+  return `<div class="advice"><b>結論</b>　${concl}${sm.notes.length ? '<br>' + sm.notes.join('<br>') : ''}</div>
+    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>位置</th><th>カード</th><th>キーワード</th><th>読み</th></tr></thead><tbody>
+    ${lines.map((l, i) => `<tr><td style="white-space:nowrap">${i + 1}. ${l.pos}</td><td style="white-space:nowrap"><b>${l.card.name}</b>${l.c.rev ? '<br><span class="revtag">逆位置</span>' : ''}</td><td>${l.kw}</td><td style="min-width:16em">${l.text}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+function renderTarot() {
+  const box = $('pane-tarot'); if (!box) return;
+  const sp = TA.SPREADS[tState.spread];
+  const drawn = !!tState.cards, allOpen = drawn && tState.open.every(Boolean);
+  const hist = tLoad();
+  box.innerHTML = `
+  <div class="card"><div class="eyebrow">タロット占い</div><h2>78枚のタロットで占う</h2>
+    <p class="lead">大アルカナ22枚・小アルカナ56枚のフルデッキを毎回シャッフルし、上から必要な枚数を引きます。正位置・逆位置はそれぞれ2分の1の確率で決まります。</p></div>
+  <div class="card">
+    <div class="row2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);margin-bottom:10px">
+      <label>占いたいこと（任意）<input id="tQ" value="${esc(tState.q)}" placeholder="例：今の職場で続けるべきか" ${drawn && !allOpen ? 'disabled' : ''}></label>
+      <label>分野<select id="tCat" ${drawn && !allOpen ? 'disabled' : ''}>${Object.entries(TA.CATS).map(([k, v]) => `<option value="${k}" ${tState.cat === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    </div>
+    <label>スプレッド（並べ方）<select id="tSp" ${drawn && !allOpen ? 'disabled' : ''}>${Object.entries(TA.SPREADS).map(([k, v]) => `<option value="${k}" ${tState.spread === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select></label>
+    <p class="hint" style="margin:6px 0 10px">${sp.desc}</p>
+    <label class="check"><input id="tRev" type="checkbox" ${tState.useRev ? 'checked' : ''} ${drawn && !allOpen ? 'disabled' : ''}><span>逆位置を使う</span></label>
+    <div class="btnrow" style="margin-top:12px"><button type="button" class="btn2 primary" id="tDraw">${drawn ? 'もう一度シャッフルして引き直す' : 'シャッフルしてカードを引く'}</button>${drawn && !allOpen ? '<button type="button" class="btn2" id="tOpenAll">すべてめくる</button>' : ''}</div>
+  </div>
+  ${drawn ? `<div class="card"><h3>${sp.name}${tState.q ? `　「${esc(tState.q)}」` : ''}</h3>${!allOpen ? '<p class="hint">裏向きのカードを1枚ずつ押してめくってください。</p>' : ''}${layoutHtml(sp, tState.spread)}</div>` : ''}
+  ${allOpen ? `<div class="card"><h3>リーディング</h3>${tReading({ spread: tState.spread, cat: tState.cat, cards: tState.cards })}</div>` : ''}
+  ${hist.length ? `<div class="card"><h3>これまでの結果</h3><div class="tablewrap"><table><tbody>${hist.slice(0, 15).map(h => `<tr><td style="white-space:nowrap">${h.date}</td><td style="white-space:nowrap">${TA.SPREADS[h.spread].name.split('（')[0]}</td><td>${h.q ? esc(h.q) : TA.CATS[h.cat]}</td><td>${h.cards.map(c => TA.byId(c.id).name + (c.rev ? '（逆）' : '')).join('、')}</td></tr>`).join('')}</tbody></table></div><p class="hint">記録はこのブラウザだけに保存されます（最新30件）。</p></div>` : ''}
+  <p class="hint">カードの絵柄は本アプリ独自の簡易デザインです。カードの意味は一般的に使われる象意を本アプリ用に要約したもので、大アルカナの番号はウェイト版の配列（8＝力、11＝正義）です。</p>`;
+  const bind = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  bind('tQ', 'input', e => tState.q = e.target.value);
+  bind('tCat', 'change', e => tState.cat = e.target.value);
+  bind('tSp', 'change', e => { tState.spread = e.target.value; tState.cards = null; renderTarot(); });
+  bind('tRev', 'change', e => tState.useRev = e.target.checked);
+  bind('tDraw', 'click', () => { tState.cards = TA.draw(tState.spread, tState.useRev); tState.open = tState.cards.map(() => false); renderTarot(); });
+  const finish = () => { if (tState.open.every(Boolean)) { const d = new Date(); const list = tLoad(); list.unshift({ date: `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`, spread: tState.spread, cat: tState.cat, q: tState.q.trim(), cards: tState.cards }); tSave(list); } renderTarot(); };
+  bind('tOpenAll', 'click', () => { tState.open = tState.open.map(() => true); finish(); });
+  box.querySelectorAll('[data-flip]').forEach(b => b.addEventListener('click', () => { tState.open[+b.dataset.flip] = true; finish(); }));
 }
 function luckHints(R) {
   const el = R.sc.element, min = Math.min(...el);
@@ -625,6 +720,7 @@ function paneBasis(R) {
     <li>九星気学：年は立春、月は節入りで区切る。吉方位は本命星基準の簡易判定。</li>
     <li>姓名判断：新字体画数・81数の吉凶は一般的な目安。ひらがな・カタカナの画数にも流派差あり。</li>
     <li>易占い：三枚硬貨法（表3・裏2）。乱数はブラウザの暗号用乱数を使用。卦の解説は本アプリによる要約で、爻辞の原文は未収録。</li>
+    <li>タロット：78枚を暗号用乱数でシャッフル（フィッシャー–イェーツ法）し、正逆は各1/2。カードの意味は本アプリによる要約。</li>
     <li>マヤ暦：ドリームスペル方式（2013年7月26日＝KIN164を基準）。</li>
     <li>総合判定・ジャンル別・月別の点数づけと資質の分類は、本アプリ独自の集計方法です（財星＝金運、官星＝仕事・女性の恋愛、財星＝男性の恋愛、木星の通過ハウス、紫微斗数の流年四化の入る宮など、各占術で一般的な対応をもとにしています）。</li>
     <li>月別運勢：月の区切りは節入り。表は各月15日時点の月柱と九星月盤で判定。</li></ul></div>

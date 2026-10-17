@@ -139,6 +139,22 @@ tr.now td { background: var(--gold-soft) }
 .btn2 { font: inherit; font-size: 14px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--indigo); background: var(--paper); color: var(--indigo); cursor: pointer }
 .btn2.primary { background: var(--indigo); color: var(--paper) }
 .btn2:disabled { opacity: .45; cursor: default }
+.tspread { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; padding: 8px 0 }
+.tgrid { display: grid; gap: 12px; justify-content: center; padding: 8px 0 }
+.tslot { display: grid; justify-items: center; gap: 4px; position: relative; min-width: 0 }
+.tslot .pl { font-size: 11px; color: var(--ink-2); text-align: center; max-width: 92px; line-height: 1.35 }
+.tcard { width: clamp(62px, 17vw, 92px); aspect-ratio: 3 / 5; border-radius: 8px; border: 1.5px solid var(--line); background: var(--paper); display: grid; place-items: center; cursor: pointer; padding: 0; font: inherit; color: var(--ink); position: relative; overflow: hidden; max-width: 100% }
+.tcard.back { background: repeating-linear-gradient(45deg, var(--indigo) 0 6px, var(--indigo-soft) 6px 12px); border-color: var(--indigo) }
+.tcard.back::after { content: ""; position: absolute; inset: 8px; border: 1.5px solid var(--gold); border-radius: 5px }
+.tcard .face { display: grid; justify-items: center; align-content: space-between; height: 100%; width: 100%; padding: 7px 4px; text-align: center }
+.tcard.rev .face { transform: rotate(180deg) }
+.tcard .num { font-family: var(--f-display); font-size: 12px; color: var(--gold); font-weight: 700 }
+.tcard .em { width: 60%; aspect-ratio: 1; border-radius: 50%; display: grid; place-content: center; font-family: var(--f-display); font-weight: 800; font-size: clamp(15px, 4vw, 22px); color: var(--paper) }
+.tcard .nm { font-size: clamp(9.5px, 2.4vw, 11.5px); font-weight: 700; line-height: 1.25 }
+.tcard.major { border-color: var(--gold) }
+.s-major { background: var(--gold) } .s-wands { background: var(--warn) } .s-cups { background: var(--indigo) } .s-swords { background: var(--mid) } .s-pentacles { background: var(--good) }
+.revtag { font-size: 10.5px; color: var(--warn); font-weight: 700 }
+@media (prefers-reduced-motion: no-preference) { .tcard { transition: transform .25s ease } .tcard.back:hover { transform: translateY(-3px) } }
 .foot { margin-top: 30px; font-size: 12px; color: var(--mid); max-width: 90ch }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease } }
 </style>
@@ -1292,6 +1308,173 @@ tr.now td { background: var(--gold-soft) }
 
 </script>
 <script>
+/* タロット（78枚・正逆）。カードの意味は一般に流通している象意を本アプリ用に要約して書き下ろしたもの。
+ * 大アルカナの順番はウェイト版（8＝力、11＝正義）。 */
+(function (root) {
+  'use strict';
+  // [名前, 正位置キーワード, 逆位置キーワード, 正位置の意味, 逆位置の意味]
+  const MAJOR = [
+    ['愚者', '自由・始まり・冒険', '無計画・軽率・迷走', '先入観を捨てて新しい一歩を踏み出す時。可能性は無限。', '準備不足のまま飛び出す危うさ。地に足をつけて。'],
+    ['魔術師', '創造・実行力・スタート', '空回り・ごまかし・準備不足', '必要な道具はそろっている。自分の力で形にできる。', '能力を生かし切れていない、または言葉だけが先行。'],
+    ['女教皇', '直感・知性・静観', '神経質・閉鎖的・思い込み', '表に出ない知恵と直感が答えを知っている。静かに観察を。', '考えすぎて心を閉ざしがち。感情を抑え込みすぎないで。'],
+    ['女帝', '豊かさ・愛情・実り', '過剰・停滞・甘え', '愛情と豊かさに満ちた実りの時。育てたものが形になる。', '与えすぎ・甘やかしすぎ、または停滞。バランスを。'],
+    ['皇帝', '統率・安定・責任', '独善・支配・頑固', 'リーダーシップと計画性で土台を固める時。', '強引さや権威主義が反発を招く。柔軟さを。'],
+    ['教皇', '信頼・伝統・助言', '形式主義・不信・孤立', '信頼できる人の助言や、伝統的な方法が道を示す。', 'ルールに縛られすぎ、または助言を聞き入れない。'],
+    ['恋人', '選択・調和・愛', '迷い・不一致・誘惑', '心が惹かれる方へ。大切な選択と人とのつながり。', '決められない迷い、または価値観のずれ。'],
+    ['戦車', '前進・勝利・意志', '暴走・方向喪失・挫折', '強い意志でコントロールしながら一気に進む時。', '勢いばかりで制御を失いがち。立ち止まって方向確認を。'],
+    ['力', '忍耐・勇気・やさしさ', '自信喪失・弱気・力任せ', '力ずくではなく、やさしさと粘り強さで困難を手なずける。', '自信をなくしている、または感情に振り回されている。'],
+    ['隠者', '内省・探求・孤独', '閉じこもり・頑固・孤立', '一人で静かに考え、本質を探る時。', '殻に閉じこもりすぎ。人の助けも受け入れて。'],
+    ['運命の輪', '転機・チャンス・好転', '停滞・すれ違い・タイミングのずれ', '運命が動き出す転換点。流れに乗る時。', 'タイミングが合わない時期。無理に動かず次の波を待つ。'],
+    ['正義', '公正・判断・バランス', '不公平・偏り・決断の遅れ', '事実にもとづき公平に判断すれば正しい結果に。', '偏った判断や不公平感。感情と事実を分けて。'],
+    ['吊るされた男', '試練・視点の転換・忍耐', '徒労・抵抗・無駄な犠牲', '動けない今は、見方を変えて学ぶ時。後に生きる経験。', '報われない我慢を続けている。手放す勇気も。'],
+    ['死神', '終わりと再生・転換', '変化への抵抗・未練・停滞', '一つのことが終わり、新しいことが始まる転換点。', '終わらせるべきことにしがみついている。'],
+    ['節制', '調和・中庸・交流', '不調和・極端・浪費', '異なるものをうまく混ぜ合わせ、バランスを取る時。', '偏りや行き過ぎ。生活と気持ちのリズムを整えて。'],
+    ['悪魔', '執着・誘惑・束縛', '解放・断ち切る・目覚め', '欲や依存に縛られていないか。目先の誘惑に注意。', '悪い習慣や関係から抜け出すきっかけ。'],
+    ['塔', '突然の変化・崩壊・啓示', '緊張の継続・回避・小さな崩れ', '思いがけない出来事で古い構造が崩れる。再建の始まり。', '崩れかけたものを無理に支えている状態。'],
+    ['星', '希望・理想・癒やし', '失望・理想が高すぎる・自信不足', '希望の光が見える時。素直な願いが叶う方向へ。', '希望を見失いがち。小さな目標から取り戻して。'],
+    ['月', '不安・曖昧・潜在意識', '誤解が解ける・不安の解消', '先が見えず不安な時。思い込みや隠し事に注意。', 'もやが晴れ、真実が見えてくる。'],
+    ['太陽', '成功・喜び・生命力', '一時的な不調・自信過剰', '明るく満ちた最良の時。素直に喜び、表に出て。', '喜びが少し陰る、または調子に乗りすぎ。'],
+    ['審判', '復活・決断・目覚め', '後悔・決断できない・停滞', '過去の努力が報われ、再挑戦や再会が訪れる。', '過去を引きずり、踏み出せない。'],
+    ['世界', '完成・達成・統合', '未完成・中途半端・目前の停滞', '一つのサイクルが完成し、満たされる時。', 'あと一歩で完成しない。最後の詰めを。'],
+  ];
+  const SUITS = [
+    { key: 'wands', name: 'ワンド', el: '火', theme: '情熱・行動・仕事', glyph: '杖' },
+    { key: 'cups', name: 'カップ', el: '水', theme: '感情・愛情・人間関係', glyph: '杯' },
+    { key: 'swords', name: 'ソード', el: '風', theme: '思考・言葉・課題', glyph: '剣' },
+    { key: 'pentacles', name: 'ペンタクル', el: '地', theme: 'お金・物質・現実', glyph: '貨' },
+  ];
+  const RANKS = ['エース', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'ペイジ', 'ナイト', 'クイーン', 'キング'];
+  // [正キーワード, 逆キーワード, 正の意味, 逆の意味] スート別に14枚
+  const MINOR = {
+    wands: [
+      ['情熱の芽生え・始動', '空回り・やる気の空転', '新しい情熱や企画が生まれる。すぐ行動を。', '意欲はあっても形にならない。準備を見直して。'],
+      ['計画・展望', '迷い・見通しの甘さ', '次の目標を描き、計画を立てる時。', '計画倒れや決断の先送り。'],
+      ['展開・待機', '遅れ・期待外れ', '準備した物事が広がり始める。遠くを見据えて。', '期待した結果が遅れる。視野を広げて。'],
+      ['安定・祝福', '形だけの安定・停滞', '一区切りの喜び。家庭や仲間との祝福。', '安定はあるが物足りなさ。'],
+      ['競争・切磋琢磨', '内輪もめ・回避', '意見をぶつけ合い、互いに高め合う。', '無益な争い、または衝突を避けすぎ。'],
+      ['勝利・評価', '慢心・評価が得られない', '努力が認められ、周囲から称賛される。', '評価が伸び悩む、または得意になりすぎ。'],
+      ['奮闘・防衛', '弱気・押し負け', '有利な立場を守るため踏ん張る時。', '圧力に押され気味。自信を取り戻して。'],
+      ['急展開・スピード', '遅延・すれ違い', '物事が一気に進む。連絡や移動が増える。', '予定の遅れや行き違い。'],
+      ['警戒・粘り強さ', '疲弊・頑固', '最後の踏ん張り。守りを固めて乗り切る。', '疲れがたまっている。休む勇気も。'],
+      ['重荷・抱え込み', '解放・荷を下ろす', '責任を抱え込みすぎ。分担を考えて。', '背負いすぎた荷を下ろすきっかけ。'],
+      ['好奇心・よい知らせ', '未熟・気まぐれ', '新しいことへの好奇心と嬉しい知らせ。', '熱しやすく冷めやすい。'],
+      ['行動力・冒険', '短気・無謀', '勢いよく飛び出す。移動や転機。', '焦って突っ走りがち。'],
+      ['自信・魅力', '嫉妬・わがまま', '明るさと自信で人を惹きつける。', '感情的になりやすい。'],
+      ['リーダーシップ・ビジョン', '独断・横暴', '大きな展望で周囲を導く。', '思い通りにしようとしすぎ。'],
+    ],
+    cups: [
+      ['愛情の始まり・感情の満ち', '感情の枯渇・閉ざす心', '新しい愛情や喜びがあふれ出す。', '気持ちが満たされない。自分をいたわって。'],
+      ['相思相愛・パートナーシップ', 'すれ違い・不均衡', '心が通じ合う。良い協力関係。', '気持ちの行き違い。対話を。'],
+      ['祝福・友情', '遊びすぎ・三角関係', '仲間と喜びを分かち合う。', '楽しさに流されすぎ。'],
+      ['倦怠・内省', '新しい関心・再出発', '満たされているのに不満。足元の恵みに気づいて。', '退屈から抜け出し、新しいことに目が向く。'],
+      ['喪失・後悔', '立ち直り・希望', '失ったものを悲しむ時。まだ残っているものもある。', '悲しみから立ち直り始める。'],
+      ['懐かしさ・純粋さ', '過去への執着', '昔の縁や思い出が心を温める。', '過去にとらわれ、前に進めない。'],
+      ['夢想・選択肢の多さ', '現実に戻る・決断', '理想や選択肢が多く迷う。現実的に見極めて。', '夢から覚め、現実的な選択ができる。'],
+      ['離れる・探求', '踏み切れない・未練', '満たされないものから離れ、より深いものを探す。', '離れるべきか迷い続ける。'],
+      ['願いの成就・満足', '慢心・物足りなさ', '願いが叶う満足のカード。', '満足しきれない、または欲張りすぎ。'],
+      ['幸福・家庭円満', '家庭内の不和', '家族や仲間との幸せ。心が満たされる。', '身近な関係にすれ違い。'],
+      ['感受性・やさしい知らせ', '気分屋・未熟さ', '素直な気持ちや嬉しい知らせ。', '感情の起伏に振り回される。'],
+      ['ロマン・誘い', '甘い言葉・現実逃避', '気持ちを届けるアプローチや誘い。', '理想ばかりで行動が伴わない。'],
+      ['思いやり・包容力', '感情的・依存', 'やさしさと共感で人を癒やす。', '感情に流されやすい。境界線を。'],
+      ['寛容・包容力ある指導', '感情の抑圧・気分のむら', '感情をコントロールし、大らかに受け止める。', '本音を隠しすぎる。'],
+    ],
+    swords: [
+      ['決断・突破', '混乱・判断ミス', '鋭い判断で道を切り開く。', '考えがまとまらず判断を誤りやすい。'],
+      ['保留・葛藤', '迷いの終わり・本音', '決めかねて目を閉ざしている状態。', '膠着が解け、向き合う時。'],
+      ['心の痛み・別れ', '回復・痛みの整理', 'つらい真実や傷心。感情を受け止めて。', '痛みが癒え始める。'],
+      ['休息・回復', '再始動・焦り', '一度立ち止まって心身を休める。', '休息から動き出す。焦りは禁物。'],
+      ['勝ち負けへの執着', '和解・空しさ', '勝っても後味の悪い争い。', '争いの終わり、または空しさに気づく。'],
+      ['移行・困難からの脱出', '停滞・未解決', '困難を離れ、穏やかな場所へ向かう。', '問題が持ち越されている。'],
+      ['策略・単独行動', '発覚・正直さ', '要領よく立ち回るが、ずるさに注意。', '隠し事が明るみに出る。正直に。'],
+      ['身動きが取れない', '解放・視界が開ける', '思い込みで自分を縛っている。', '縛りがほどけ、動けるようになる。'],
+      ['不安・悩み', '不安の軽減', '眠れないほどの心配。多くは考えすぎ。', '最悪の時期を抜けつつある。'],
+      ['どん底・終わり', '回復の兆し', '一つの苦しみが終わる。これ以上悪くはならない。', '底を打ち、ゆっくり回復へ。'],
+      ['観察・情報収集', '噂・詮索', '注意深く情報を集める。', '噂話や詮索に注意。'],
+      ['迅速・果敢', '無謀・攻撃的', '素早く行動し、問題に切り込む。', '性急さが衝突を生む。'],
+      ['知性・自立', '冷たさ・批判的', '冷静で公正な判断。自立した姿勢。', '厳しさが行き過ぎる。'],
+      ['論理・権威', '独断・冷酷', '理性と公正で物事を裁く。', '理屈で人を追い詰める。'],
+    ],
+    pentacles: [
+      ['実りの始まり・好機', '機会損失・浪費', 'お金や仕事の具体的なチャンス。', '好機を逃しやすい。お金の使い方に注意。'],
+      ['やりくり・柔軟さ', '不安定・手一杯', '複数のことを器用にこなす。', '抱えすぎてバランスを崩す。'],
+      ['技術・協働', '手抜き・評価不足', '技術を磨き、協力して成果を上げる。', '連携不足や質の低下。'],
+      ['安定・所有', '執着・けち', 'お金や立場を守り、安定させる。', '守りに入りすぎ、または手放せない。'],
+      ['困窮・孤立', '回復・支援を得る', 'お金や心の余裕がない時。助けを求めて。', '苦境から抜け出す糸口。'],
+      ['与える・受け取る', '不公平・見返り目当て', '援助や分配がうまく巡る。', '与える側と受ける側の不均衡。'],
+      ['成長を待つ・評価', '焦り・成果が出ない', '育てたものの成長を見守る時。', '努力が実らず焦る。やり方を見直して。'],
+      ['修練・勤勉', 'マンネリ・雑な仕事', '地道な努力と技術の習得。', '惰性の仕事になっている。'],
+      ['自立した豊かさ', '依存・見せかけ', '自分の力で得た豊かさと余裕。', '豊かさを人に頼っている、または見栄。'],
+      ['繁栄・継承', '財産問題・家族の不和', '家族や組織の長期的な繁栄。', '相続や家のお金の問題に注意。'],
+      ['勉強・堅実な一歩', '怠惰・非現実的', 'こつこつ学び、現実的な目標に取り組む。', '計画倒れ、学びが続かない。'],
+      ['着実・忍耐', '停滞・頑固', 'ゆっくりだが確実に前進する。', '慎重すぎて進まない。'],
+      ['豊かさ・面倒見', '物質主義・過保護', '実際的なやさしさで周りを支える。', 'お金や物に偏りがち。'],
+      ['成功・富', '欲深さ・保守的', '堅実な成功と経済的な安定。', 'お金への執着や頑固さ。'],
+    ],
+  };
+  // 78枚のデッキ
+  const DECK = [];
+  MAJOR.forEach((m, i) => DECK.push({ id: 'M' + i, major: true, num: i, name: m[0], up: m[1], rev: m[2], upText: m[3], revText: m[4] }));
+  SUITS.forEach(s => MINOR[s.key].forEach((m, i) => DECK.push({ id: s.key + i, major: false, suit: s.key, rank: i + 1, name: `${s.name}の${RANKS[i]}`, up: m[0], rev: m[1], upText: m[2], revText: m[3] })));
+
+  const SPREADS = {
+    one: { name: 'ワンオラクル（1枚）', desc: '今日のメッセージや、一つの問いへの端的な答え。', pos: ['答え・メッセージ'] },
+    three: { name: 'スリーカード（3枚）', desc: '過去・現在・未来の流れを読む基本形。', pos: ['過去', '現在', '未来'] },
+    choice: { name: '二者択一（5枚）', desc: 'A案とB案を選んだ場合の行方を比べる。', pos: ['現状', 'Aを選んだ場合の近い未来', 'Bを選んだ場合の近い未来', 'Aを選んだ場合の結果', 'Bを選んだ場合の結果'] },
+    horseshoe: { name: 'ホースシュー（7枚）', desc: '問題の経過と対策を具体的に見る。', pos: ['過去', '現在', '近い未来', 'あなたの気持ち・立場', '周囲の状況・相手', '障害・対策', '最終結果'] },
+    celtic: { name: 'ケルト十字（10枚）', desc: '状況を多角的に深く読む本格的な展開。', pos: ['現状', '障害・課題', '顕在意識（目標）', '潜在意識（根本）', '過去', '近い未来', 'あなた自身', '周囲の環境', '願望と恐れ', '最終結果'] },
+  };
+  const CATS = { general: '全体', love: '恋愛・結婚', work: '仕事', money: 'お金', relation: '人間関係', self: '自分自身' };
+
+  function rnd(n) { const a = new Uint32Array(1); const lim = Math.floor(0x100000000 / n) * n; let v; do { (root.crypto || globalThis.crypto).getRandomValues(a); v = a[0]; } while (v >= lim); return v % n; }
+  function shuffle(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function draw(spreadKey, useReversed) {
+    const sp = SPREADS[spreadKey];
+    const deck = shuffle(DECK.map(c => c.id));
+    return deck.slice(0, sp.pos.length).map(id => ({ id, rev: useReversed ? rnd(2) === 1 : false }));
+  }
+  const byId = id => DECK.find(c => c.id === id);
+
+  // 全体の読み
+  function summary(cards) {
+    const cs = cards.map(c => ({ ...byId(c.id), rev: c.rev }));
+    const n = cs.length, majors = cs.filter(c => c.major).length, revs = cs.filter(c => c.rev).length;
+    const suitCount = {}; cs.filter(c => !c.major).forEach(c => suitCount[c.suit] = (suitCount[c.suit] || 0) + 1);
+    const notes = [];
+    if (n >= 3) {
+      const r = majors / n;
+      if (r >= 0.5) notes.push(`大アルカナが${majors}枚と多く、自分の力を超えた大きな流れや人生の転機が関わる問題です。`);
+      else if (majors === 0) notes.push('大アルカナが出ていないため、日常の範囲で自分の行動によって変えられる問題です。');
+      const top = Object.entries(suitCount).sort((a, b) => b[1] - a[1])[0];
+      if (top && top[1] >= Math.max(2, Math.ceil(n * 0.4))) { const s = SUITS.find(x => x.key === top[0]); notes.push(`${s.name}（${s.el}・${s.theme}）が${top[1]}枚と目立ち、${s.theme.split('・')[0]}の面が鍵になっています。`); }
+      const missing = SUITS.filter(s => !suitCount[s.key]).map(s => s.name);
+      if (n >= 7 && missing.length) notes.push(`${missing.join('・')}が1枚も出ていないため、その領域（${missing.map(m => SUITS.find(s => s.name === m).theme.split('・')[0]).join('・')}）が見落とされている可能性があります。`);
+      if (revs / n >= 0.6) notes.push(`逆位置が${revs}枚と多く、物事が滞りやすい、または内側で消化している時期です。焦らず整える方向へ。`);
+      else if (revs === 0 && n >= 3) notes.push('すべて正位置で、エネルギーが素直に外へ流れています。');
+      const courts = cs.filter(c => !c.major && c.rank >= 11).length;
+      if (courts >= 2) notes.push(`人物カード（ペイジ〜キング）が${courts}枚あり、周りの人の影響が大きく関わっています。`);
+      const ranks = {}; cs.filter(c => !c.major && c.rank <= 10).forEach(c => ranks[c.rank] = (ranks[c.rank] || 0) + 1);
+      Object.entries(ranks).filter(([, v]) => v >= 2).forEach(([k, v]) => notes.push(`数字の${k === '1' ? 'エース' : k}が${v}枚。${{ 1: '新しい始まり', 2: '選択とバランス', 3: '発展と協力', 4: '安定', 5: '変化と葛藤', 6: '調和と回復', 7: '試練と見直し', 8: '前進と努力', 9: '完成間近', 10: '一区切り' }[k]}のテーマが強調されています。`));
+    }
+    return { majors, revs, suitCount, notes };
+  }
+  const CAT_HINT = {
+    love: { wands: '情熱やアプローチの積極性', cups: '気持ちの通い合い', swords: '言葉や考え方のすれ違い', pentacles: '結婚・生活など現実面', major: '関係を左右する大きな流れ' },
+    work: { wands: '意欲・挑戦・企画', cups: '職場の人間関係とやりがい', swords: '判断・交渉・課題処理', pentacles: '収入・成果・実務', major: 'キャリアの転機' },
+    money: { wands: '稼ぐための行動', cups: '気持ちによる出費', swords: 'お金をめぐる判断・トラブル', pentacles: '収入・資産そのもの', major: 'お金の流れの大きな変化' },
+    relation: { wands: '主導権や勢い', cups: '思いやりと共感', swords: '言葉と誤解', pentacles: '利害や現実的な協力', major: '関係性の転機' },
+    general: {}, self: { wands: '情熱と行動力', cups: '感受性', swords: '思考と判断', pentacles: '現実感覚', major: '人生のテーマ' },
+  };
+  function cardLine(c, cat) {
+    const card = byId(c.id), h = CAT_HINT[cat] || {};
+    const area = card.major ? h.major : h[card.suit];
+    return { card, text: (c.rev ? card.revText : card.upText) + (area ? `（${CATS[cat]}では「${area}」に関わるカード）` : ''), kw: c.rev ? card.rev : card.up };
+  }
+  root.Tarot = { DECK, MAJOR, SUITS, RANKS, SPREADS, CATS, draw, byId, summary, cardLine, shuffle };
+  if (typeof module !== 'undefined' && module.exports) module.exports = root.Tarot;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
 (function () {
 'use strict';
 const U = window.Uranai, D = window.UData;
@@ -1393,14 +1576,14 @@ function synth(R) {
 }
 
 // ---------- 描画 ----------
-const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
+const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['tarot', 'タロット'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
 let current = 'sogo';
 try { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h)) current = h; } catch (e) { }
 
 function render(R) {
   const S = synth(R);
   const panes = {
-    sogo: paneSogo(R, S), eki: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
+    sogo: paneSogo(R, S), eki: '', tarot: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
     rokusei: paneRoku(R), gosei: paneGosei(R), num: paneNum(R), seimei: paneSeimei(R), shuku: paneShuku(R), basis: paneBasis(R)
   };
   $('out').innerHTML = `<div class="tabs" role="tablist">${TABS.map(([k, n]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${k === current}" data-k="${k}">${n}</button>`).join('')}</div>` +
@@ -1408,7 +1591,7 @@ function render(R) {
   $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); }));
   $('out').querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); $('tab-' + a.dataset.goto).click(); window.scrollTo({ top: $('out').offsetTop - 10 }); }));
   $('out').querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const el = $(a.dataset.jump); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
-  renderEki();
+  renderEki(); renderTarot();
   const st = $('strokeEdit'); if (st) st.addEventListener('change', e => { const c = e.target.dataset.c; if (c) { if (e.target.value) overrides[c] = +e.target.value; else delete overrides[c]; run(); } });
 }
 
@@ -1558,6 +1741,84 @@ function renderEki() {
   if (b2) b2.addEventListener('click', () => toss(6));
   if (b3) b3.addEventListener('click', () => { ekState.extra = true; renderEki(); });
   if (b4) b4.addEventListener('click', () => { ekState.extra = false; renderEki(); });
+}
+// ---------- タロット ----------
+const TA = window.Tarot;
+const ROMAN = ['0', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX', 'XXI'];
+let tState = { spread: 'three', cat: 'general', q: '', useRev: true, cards: null, open: [] };
+function tLoad() { try { return JSON.parse(localStorage.getItem('uranai-tarot') || '[]'); } catch (e) { return []; } }
+function tSave(list) { try { localStorage.setItem('uranai-tarot', JSON.stringify(list.slice(0, 30))); } catch (e) { } }
+function cardFace(c, open, idx) {
+  if (!open) return `<button type="button" class="tcard back" data-flip="${idx}" aria-label="${idx + 1}枚目をめくる"></button>`;
+  const k = TA.byId(c.id), cls = k.major ? 's-major' : 's-' + k.suit;
+  const em = k.major ? ROMAN[k.num] : TA.SUITS.find(s => s.key === k.suit).glyph;
+  const num = k.major ? '大アルカナ' : TA.RANKS[k.rank - 1];
+  return `<div class="tcard ${k.major ? 'major' : ''} ${c.rev ? 'rev' : ''}" role="img" aria-label="${k.name}${c.rev ? '（逆位置）' : ''}"><div class="face"><span class="num">${num}</span><span class="em ${cls}">${em}</span><span class="nm">${k.name}</span></div></div>`;
+}
+function slot(i, sp) {
+  const c = tState.cards[i], open = tState.open[i];
+  return `<div class="tslot">${cardFace(c, open, i)}<span class="pl">${i + 1}. ${sp.pos[i]}</span>${open && c.rev ? '<span class="revtag">逆位置</span>' : ''}</div>`;
+}
+function layoutHtml(sp, key) {
+  const n = sp.pos.length;
+  if (key === 'celtic') {
+    const cell = (i, r, col) => `<div style="grid-row:${r};grid-column:${col}">${slot(i, sp)}</div>`;
+    const cross = `<div style="grid-row:2;grid-column:2;display:flex;gap:8px;justify-content:center">${slot(0, sp)}${slot(1, sp)}</div>`;
+    return `<div style="overflow-x:auto"><div class="tgrid" style="grid-template-columns:repeat(4,auto)">${cell(4, 2, 1)}${cell(2, 1, 2)}${cross}${cell(3, 3, 2)}${cell(5, 2, 3)}${cell(9, 1, 4)}${cell(8, 2, 4)}${cell(7, 3, 4)}${cell(6, 4, 4)}</div></div>
+      <p class="hint" style="text-align:center">本来「2. 障害・課題」は1枚目の上に横向きに重ねて置くカードです。読みやすさのため横に並べています。</p>`;
+  }
+  if (key === 'choice') {
+    const cell = (i, r, col) => `<div style="grid-row:${r};grid-column:${col}">${slot(i, sp)}</div>`;
+    return `<div class="tgrid" style="grid-template-columns:repeat(3,auto)">${cell(3, 1, 1)}${cell(4, 1, 3)}${cell(1, 2, 1)}${cell(2, 2, 3)}${cell(0, 3, 2)}<div style="grid-row:1;grid-column:2;align-self:center" class="hint">A ／ B</div></div>`;
+  }
+  const offs = key === 'horseshoe' ? [60, 30, 0, 0, 0, 30, 60] : [];
+  return `<div class="tspread">${Array.from({ length: n }, (_, i) => `<div style="margin-top:${offs[i] || 0}px">${slot(i, sp)}</div>`).join('')}</div>`;
+}
+function tReading(rec) {
+  const sp = TA.SPREADS[rec.spread];
+  const lines = rec.cards.map((c, i) => ({ pos: sp.pos[i], c, ...TA.cardLine(c, rec.cat) }));
+  const sm = TA.summary(rec.cards);
+  const last = lines[lines.length - 1];
+  let concl = '';
+  if (rec.spread === 'one') concl = `答えは<b>${last.card.name}${last.c.rev ? '（逆位置）' : ''}</b>：${last.text}`;
+  else if (rec.spread === 'choice') concl = `A案の結果は<b>${lines[3].card.name}${lines[3].c.rev ? '（逆）' : ''}</b>（${lines[3].kw}）、B案の結果は<b>${lines[4].card.name}${lines[4].c.rev ? '（逆）' : ''}</b>（${lines[4].kw}）。キーワードを見比べ、自分が望む方向に近い方を選ぶのが二者択一の読み方です。`;
+  else concl = `最終的な流れは<b>${last.card.name}${last.c.rev ? '（逆位置）' : ''}</b>：${last.text}`;
+  return `<div class="advice"><b>結論</b>　${concl}${sm.notes.length ? '<br>' + sm.notes.join('<br>') : ''}</div>
+    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>位置</th><th>カード</th><th>キーワード</th><th>読み</th></tr></thead><tbody>
+    ${lines.map((l, i) => `<tr><td style="white-space:nowrap">${i + 1}. ${l.pos}</td><td style="white-space:nowrap"><b>${l.card.name}</b>${l.c.rev ? '<br><span class="revtag">逆位置</span>' : ''}</td><td>${l.kw}</td><td style="min-width:16em">${l.text}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+function renderTarot() {
+  const box = $('pane-tarot'); if (!box) return;
+  const sp = TA.SPREADS[tState.spread];
+  const drawn = !!tState.cards, allOpen = drawn && tState.open.every(Boolean);
+  const hist = tLoad();
+  box.innerHTML = `
+  <div class="card"><div class="eyebrow">タロット占い</div><h2>78枚のタロットで占う</h2>
+    <p class="lead">大アルカナ22枚・小アルカナ56枚のフルデッキを毎回シャッフルし、上から必要な枚数を引きます。正位置・逆位置はそれぞれ2分の1の確率で決まります。</p></div>
+  <div class="card">
+    <div class="row2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);margin-bottom:10px">
+      <label>占いたいこと（任意）<input id="tQ" value="${esc(tState.q)}" placeholder="例：今の職場で続けるべきか" ${drawn && !allOpen ? 'disabled' : ''}></label>
+      <label>分野<select id="tCat" ${drawn && !allOpen ? 'disabled' : ''}>${Object.entries(TA.CATS).map(([k, v]) => `<option value="${k}" ${tState.cat === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    </div>
+    <label>スプレッド（並べ方）<select id="tSp" ${drawn && !allOpen ? 'disabled' : ''}>${Object.entries(TA.SPREADS).map(([k, v]) => `<option value="${k}" ${tState.spread === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select></label>
+    <p class="hint" style="margin:6px 0 10px">${sp.desc}</p>
+    <label class="check"><input id="tRev" type="checkbox" ${tState.useRev ? 'checked' : ''} ${drawn && !allOpen ? 'disabled' : ''}><span>逆位置を使う</span></label>
+    <div class="btnrow" style="margin-top:12px"><button type="button" class="btn2 primary" id="tDraw">${drawn ? 'もう一度シャッフルして引き直す' : 'シャッフルしてカードを引く'}</button>${drawn && !allOpen ? '<button type="button" class="btn2" id="tOpenAll">すべてめくる</button>' : ''}</div>
+  </div>
+  ${drawn ? `<div class="card"><h3>${sp.name}${tState.q ? `　「${esc(tState.q)}」` : ''}</h3>${!allOpen ? '<p class="hint">裏向きのカードを1枚ずつ押してめくってください。</p>' : ''}${layoutHtml(sp, tState.spread)}</div>` : ''}
+  ${allOpen ? `<div class="card"><h3>リーディング</h3>${tReading({ spread: tState.spread, cat: tState.cat, cards: tState.cards })}</div>` : ''}
+  ${hist.length ? `<div class="card"><h3>これまでの結果</h3><div class="tablewrap"><table><tbody>${hist.slice(0, 15).map(h => `<tr><td style="white-space:nowrap">${h.date}</td><td style="white-space:nowrap">${TA.SPREADS[h.spread].name.split('（')[0]}</td><td>${h.q ? esc(h.q) : TA.CATS[h.cat]}</td><td>${h.cards.map(c => TA.byId(c.id).name + (c.rev ? '（逆）' : '')).join('、')}</td></tr>`).join('')}</tbody></table></div><p class="hint">記録はこのブラウザだけに保存されます（最新30件）。</p></div>` : ''}
+  <p class="hint">カードの絵柄は本アプリ独自の簡易デザインです。カードの意味は一般的に使われる象意を本アプリ用に要約したもので、大アルカナの番号はウェイト版の配列（8＝力、11＝正義）です。</p>`;
+  const bind = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  bind('tQ', 'input', e => tState.q = e.target.value);
+  bind('tCat', 'change', e => tState.cat = e.target.value);
+  bind('tSp', 'change', e => { tState.spread = e.target.value; tState.cards = null; renderTarot(); });
+  bind('tRev', 'change', e => tState.useRev = e.target.checked);
+  bind('tDraw', 'click', () => { tState.cards = TA.draw(tState.spread, tState.useRev); tState.open = tState.cards.map(() => false); renderTarot(); });
+  const finish = () => { if (tState.open.every(Boolean)) { const d = new Date(); const list = tLoad(); list.unshift({ date: `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`, spread: tState.spread, cat: tState.cat, q: tState.q.trim(), cards: tState.cards }); tSave(list); } renderTarot(); };
+  bind('tOpenAll', 'click', () => { tState.open = tState.open.map(() => true); finish(); });
+  box.querySelectorAll('[data-flip]').forEach(b => b.addEventListener('click', () => { tState.open[+b.dataset.flip] = true; finish(); }));
 }
 function luckHints(R) {
   const el = R.sc.element, min = Math.min(...el);
@@ -1721,6 +1982,7 @@ function paneBasis(R) {
     <li>九星気学：年は立春、月は節入りで区切る。吉方位は本命星基準の簡易判定。</li>
     <li>姓名判断：新字体画数・81数の吉凶は一般的な目安。ひらがな・カタカナの画数にも流派差あり。</li>
     <li>易占い：三枚硬貨法（表3・裏2）。乱数はブラウザの暗号用乱数を使用。卦の解説は本アプリによる要約で、爻辞の原文は未収録。</li>
+    <li>タロット：78枚を暗号用乱数でシャッフル（フィッシャー–イェーツ法）し、正逆は各1/2。カードの意味は本アプリによる要約。</li>
     <li>マヤ暦：ドリームスペル方式（2013年7月26日＝KIN164を基準）。</li>
     <li>総合判定・ジャンル別・月別の点数づけと資質の分類は、本アプリ独自の集計方法です（財星＝金運、官星＝仕事・女性の恋愛、財星＝男性の恋愛、木星の通過ハウス、紫微斗数の流年四化の入る宮など、各占術で一般的な対応をもとにしています）。</li>
     <li>月別運勢：月の区切りは節入り。表は各月15日時点の月柱と九星月盤で判定。</li></ul></div>

@@ -29,6 +29,7 @@ def main():
     page = page.replace("<script>/*DATA*/</script>", "<script>\n" + (SRC / "data.js").read_text(encoding="utf-8") + "\n</script>")
     page = page.replace("<script>/*GENRE*/</script>", "<script>\n" + (SRC / "genre.js").read_text(encoding="utf-8") + "\n</script>")
     page = page.replace("<script>/*EKIKYO*/</script>", "<script>\n" + (SRC / "ekikyo.js").read_text(encoding="utf-8") + "\n</script>")
+    page = page.replace("<script>/*TAROT*/</script>", "<script>\n" + (SRC / "tarot.js").read_text(encoding="utf-8") + "\n</script>")
     # <title>〜</style> までを head に入れ、残りを body に入れる
     split = page.index("</style>") + len("</style>")
     out = HEAD + page[:split] + "\n</head>\n<body>\n" + page[split:] + "\n</body>\n</html>\n"
