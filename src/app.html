@@ -144,6 +144,19 @@ tr.now td { background: var(--gold-soft) }
 .s-major { background: var(--gold) } .s-wands { background: var(--warn) } .s-cups { background: var(--indigo) } .s-swords { background: var(--mid) } .s-pentacles { background: var(--good) }
 .revtag { font-size: 10.5px; color: var(--warn); font-weight: 700 }
 @media (prefers-reduced-motion: no-preference) { .tcard { transition: transform .25s ease } .tcard.back:hover { transform: translateY(-3px) } }
+.wtable tr { cursor: pointer }
+.wtable tr.sel td { background: var(--gold-soft) }
+.wtable tr:hover td { background: var(--indigo-soft) }
+.evlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 0 }
+.evlist li { display: grid; grid-template-columns: 6.5em 7em minmax(0, 1fr); gap: 4px 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px }
+.evlist .k { font-size: 12px }
+@media (max-width: 600px) { .evlist li { grid-template-columns: 5.5em minmax(0, 1fr) } .evlist .k { display: none } }
+.ychips { display: flex; flex-wrap: wrap; gap: 6px }
+.ychips button { font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums }
+.ychips button[aria-pressed="true"] { background: var(--indigo); color: var(--paper); border-color: var(--indigo) }
+.chartwrap { overflow-x: auto }
+.chartwrap svg text { fill: var(--ink-2); font-family: var(--f-body) }
+.pos { color: var(--good) } .neg { color: var(--warn) }
 .foot { margin-top: 30px; font-size: 12px; color: var(--mid); max-width: 90ch }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease } }
 </style>
@@ -212,6 +225,8 @@ tr.now td { background: var(--gold-soft) }
 <script>/*GENRE*/</script>
 <script>/*EKIKYO*/</script>
 <script>/*TAROT*/</script>
+<script>/*MARKET*/</script>
+<script>/*WORLD*/</script>
 <script>
 (function () {
 'use strict';
@@ -314,22 +329,22 @@ function synth(R) {
 }
 
 // ---------- 描画 ----------
-const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['tarot', 'タロット'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
+const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['tarot', 'タロット'], ['world', '世の中の暦'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
 let current = 'sogo';
 try { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h)) current = h; } catch (e) { }
 
 function render(R) {
   const S = synth(R);
   const panes = {
-    sogo: paneSogo(R, S), eki: '', tarot: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
+    sogo: paneSogo(R, S), eki: '', tarot: '', world: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
     rokusei: paneRoku(R), gosei: paneGosei(R), num: paneNum(R), seimei: paneSeimei(R), shuku: paneShuku(R), basis: paneBasis(R)
   };
   $('out').innerHTML = `<div class="tabs" role="tablist">${TABS.map(([k, n]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${k === current}" data-k="${k}">${n}</button>`).join('')}</div>` +
     TABS.map(([k]) => `<section class="pane" role="tabpanel" id="pane-${k}" ${k === current ? '' : 'hidden'}>${panes[k]}</section>`).join('');
-  $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); }));
+  $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); if (current === 'world') renderWorld(); }));
   $('out').querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); $('tab-' + a.dataset.goto).click(); window.scrollTo({ top: $('out').offsetTop - 10 }); }));
   $('out').querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const el = $(a.dataset.jump); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
-  renderEki(); renderTarot();
+  renderEki(); renderTarot(); if (current === 'world') renderWorld();
   const st = $('strokeEdit'); if (st) st.addEventListener('change', e => { const c = e.target.dataset.c; if (c) { if (e.target.value) overrides[c] = +e.target.value; else delete overrides[c]; run(); } });
 }
 
@@ -558,6 +573,85 @@ function renderTarot() {
   bind('tOpenAll', 'click', () => { tState.open = tState.open.map(() => true); finish(); });
   box.querySelectorAll('[data-flip]').forEach(b => b.addEventListener('click', () => { tState.open[+b.dataset.flip] = true; finish(); }));
 }
+// ---------- 世の中の暦 ----------
+const WD = window.UWorld, MK = window.UMarket;
+const wState = { Y: new Date().getFullYear(), series: 'ni225', cache: {}, conj: null };
+const pct = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+const pcls = v => v >= 0 ? 'pos' : 'neg';
+const KINDN = { season: '季節', eclipse: '日食・月食', retro: '逆行', ingress: '星座移動', conj: '会合' };
+function wEvents(Y) { if (!wState.cache[Y]) wState.cache[Y] = WD.eventsOfYear(Y); return wState.cache[Y]; }
+function branchChart(an, sel) {
+  const W = 640, H = 230, L = 46, R = 10, T = 16, B = 46, bw = (W - L - R) / 12;
+  const vals = an.byBranch.map(x => x.st ? x.st.avg : 0);
+  const mx = Math.max(0.05, ...vals.map(Math.abs)) * 1.15;
+  const y = v => T + (H - T - B) / 2 * (1 - v / mx);
+  const ticks = [-mx, -mx / 2, 0, mx / 2, mx].map(v => Math.round(v * 100));
+  let g = ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${y(t / 100)}" y2="${y(t / 100)}" stroke="var(--line)" ${t === 0 ? 'stroke-width="1.5" stroke="var(--ink-2)"' : ''}/><text x="${L - 6}" y="${y(t / 100) + 4}" text-anchor="end" font-size="11">${t}%</text>`).join('');
+  an.byBranch.forEach((x, i) => {
+    const v = vals[i], x0 = L + i * bw + 6, h = Math.abs(y(v) - y(0));
+    g += `<rect x="${x0}" y="${Math.min(y(v), y(0))}" width="${bw - 12}" height="${Math.max(1, h)}" rx="2" fill="${v >= 0 ? 'var(--good)' : 'var(--warn)'}" ${i === sel ? 'stroke="var(--gold)" stroke-width="3"' : 'opacity=".75"'}/>`;
+    g += `<text x="${x0 + (bw - 12) / 2}" y="${H - B + 18}" text-anchor="middle" font-size="13" style="fill:var(--ink)">${U.BRANCHES[i]}</text><text x="${x0 + (bw - 12) / 2}" y="${H - B + 34}" text-anchor="middle" font-size="10">${x.st ? x.st.n + '回' : ''}</text>`;
+  });
+  return `<div class="chartwrap"><svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:520px" role="img" aria-label="十二支ごとの平均騰落率">${g}</svg></div>`;
+}
+function renderWorld() {
+  const box = $('pane-world'); if (!box) return;
+  const Y0 = new Date().getFullYear(), Y = wState.Y;
+  const years = Array.from({ length: 20 }, (_, i) => Y0 + i);
+  const themes = years.map(y => WD.yearTheme(y));
+  const ser = MK.series[wState.series], an = WD.anomaly(ser, Y0);
+  const ni = WD.anomaly(MK.series.ni225, Y0);
+  if (!wState.conj) wState.conj = WD.conjunctions(Y0, Y0 + 20);
+  const t = themes.find(x => x.Y === Y), ev = wEvents(Y);
+  const conjY = wState.conj.filter(c => c.d.getUTCFullYear() === Y);
+  const allEv = [...ev, ...conjY.map(c => ({ d: c.d, kind: 'conj', text: c.text, note: c.note }))].sort((a, b) => a.d - b.d);
+  const h = WD.history(Y);
+  const rAll = WD.returns(MK.series.ni225), rU = WD.returns(MK.series.usdjpy);
+  const ret = (arr, y) => { const x = arr.find(z => z.y === y); return x && !x.partial ? x.r : null; };
+  const bSt = an.byBranch[t.branch].st, kSt = an.byKyu[t.kyu - 1].st;
+  const fx = wState.series !== 'ni225';
+  box.innerHTML = `
+  <div class="card"><div class="eyebrow">世の中の暦</div><h2>これから20年の世の中の流れ</h2>
+    <p class="lead">天文計算で確定する天体のイベント、占術から見た年のテーマ、同じ干支・九星の年に起きた出来事、相場の干支アノマリーの検証を、年ごとにまとめました。</p>
+    <p class="hint" style="margin-top:6px">天文イベントは計算で確定する事実です。年のテーマは占術上の解釈であり、出来事の予言ではありません。過去の出来事や相場との対応は、件数が少なく偶然の一致と区別できません。</p></div>
+  <div class="card"><h3>20年の一覧（行を押すと詳細を表示）</h3><div class="tablewrap"><table class="wtable"><thead><tr><th>年</th><th>干支</th><th>九星（中宮）</th><th>木星</th><th>土星</th><th>天中殺の人</th><th>相場格言</th><th>日経平均・同じ十二支の年の平均</th></tr></thead><tbody>
+  ${themes.map(x => { const st = ni.byBranch[x.branch].st; return `<tr data-y="${x.Y}" class="${x.Y === Y ? 'sel' : ''}"><td><b>${x.Y}</b></td><td>${x.kanshi}</td><td>${x.kyuName}</td><td>${x.jupiter.map(i => WD.SIGNS[i].replace('座', '')).join('→')}</td><td>${x.saturn.map(i => WD.SIGNS[i].replace('座', '')).join('→')}</td><td>${x.tc}</td><td>${WD.PROVERB[x.branch]}</td><td class="${pcls(st.avg)}">${pct(st.avg)}（${st.up}/${st.n}年上昇）</td></tr>`; }).join('')}
+  </tbody></table></div></div>
+  <div class="card"><div class="ychips" role="group" aria-label="年を選ぶ">${years.map(y => `<button type="button" data-yy="${y}" aria-pressed="${y === Y}">${y}</button>`).join('')}</div></div>
+  <div class="card"><div class="eyebrow">${Y}年</div><h2>${Y}年（${t.kanshi}・${t.kyuName}中宮）</h2>
+    <div class="cols" style="margin-top:8px">
+      <div><h3>A. 天文・暦のイベント</h3><ul class="evlist">${allEv.map(e => `<li><span>${WD.fmt(e.d)}</span><span class="k"><span class="pill ${e.kind === 'eclipse' ? 'pm1' : e.kind === 'conj' ? 'p2' : 'p0'}">${KINDN[e.kind]}</span></span><span>${esc(e.text)}${e.note ? `<br><span class="hint">${esc(e.note)}</span>` : ''}</span></li>`).join('')}</ul>
+        <p class="hint" style="margin-top:6px">日付は日本時間。食は世界全体の食の最大時刻、逆行は留の日付で計算しています。</p></div>
+      <div><h3>B. 占術から見た年のテーマ</h3><dl class="kv">
+        <dt>干支</dt><dd><b>${t.kanshi}</b>　${t.stemText}。${t.brText}。</dd>
+        <dt>九星</dt><dd>${t.kyuText}</dd>
+        <dt>木星</dt><dd>${t.jText}<br><span class="hint">拡大・好況が向かいやすい分野（西洋占星術の世相読み）</span></dd>
+        <dt>土星</dt><dd>${t.sText}<br><span class="hint">試練・引き締め・再構築がテーマになりやすい分野</span></dd>
+        <dt>数秘</dt><dd>${Y}→${t.uni}：${t.uniText}</dd>
+        <dt>算命学</dt><dd>${t.tc}の人にとって天中殺の年</dd>
+        <dt>六星占術</dt><dd>大殺界：${t.roku.join('、')}</dd></dl></div>
+    </div></div>
+  <div class="card"><h3>C. 過去の同じ年回りに起きたこと</h3>
+    <div class="cols">
+      <div><h4 style="margin:0 0 6px">同じ干支（${t.kanshi}）の年</h4>${h.kanshi.map(x => `<p style="margin:0 0 10px"><b>${x.y}年</b>　<span class="hint">日経平均 ${ret(rAll, x.y) === null ? '—' : `<span class="${pcls(ret(rAll, x.y))}">${pct(ret(rAll, x.y))}</span>`}／ドル円 ${ret(rU, x.y) === null ? '—' : pct(ret(rU, x.y))}</span><br>${x.list.length ? x.list.map(e => `・${e[3]}<span class="hint">（${e[1] === 'J' ? '日本' : '世界'}・${WD.CATN[e[2]]}）</span>`).join('<br>') : '<span class="hint">本アプリの年表に該当する出来事はありません</span>'}</p>`).join('')}</div>
+      <div><h4 style="margin:0 0 6px">同じ九星（${t.kyuName}中宮）の年（最近6回）</h4>${h.kyu.map(x => `<p style="margin:0 0 10px"><b>${x.y}年</b>（${x.kanshi}）　<span class="hint">日経平均 ${ret(rAll, x.y) === null ? '—' : `<span class="${pcls(ret(rAll, x.y))}">${pct(ret(rAll, x.y))}</span>`}</span><br>${x.list.length ? x.list.map(e => `・${e[3]}`).join('<br>') : '<span class="hint">該当なし</span>'}</p>`).join('')}</div>
+    </div>
+    <p class="hint">年表は1900〜2025年の主要な出来事を本アプリで抜粋したもので、網羅的ではありません。同じ年回りに似た出来事が起きたように見えても、偶然の可能性が高いことにご注意ください。</p></div>
+  <div class="card"><h3>D. 相場アノマリーの検証</h3>
+    <label style="max-width:18em">対象<select id="wSer">${Object.entries(MK.series).map(([k, v]) => `<option value="${k}" ${k === wState.series ? 'selected' : ''}>${v.name}（${v.start + 1}〜${Y0 - 1}年）</option>`).join('')}</select></label>
+    <p class="lead" style="margin-top:10px">${Y}年は<b>${U.BRANCHES[t.branch]}年</b>。格言では「${WD.PROVERB[t.branch]}」。過去の${ser.name}は、${U.BRANCHES[t.branch]}年の平均 <b class="${pcls(bSt.avg)}">${pct(bSt.avg)}</b>（中央値 ${pct(bSt.med)}、${bSt.n}回中${bSt.up}回上昇）でした。全年の平均は ${pct(an.all.avg)}（${an.all.n}年中${an.all.up}年上昇）です。${fx ? '（為替は上昇＝円安です）' : ''}</p>
+    <p class="hint">${t.kyuName}中宮の年の平均は ${kSt ? pct(kSt.avg) + `（${kSt.n}回中${kSt.up}回上昇）` : '—'}。</p>
+    ${branchChart(an, t.branch)}
+    <div class="tablewrap"><table><thead><tr><th>十二支</th><th>格言</th><th>平均</th><th>中央値</th><th>上昇した年</th><th>最大／最小</th><th>各年</th></tr></thead><tbody>
+    ${an.byBranch.map(x => `<tr${x.b === t.branch ? ' class="now"' : ''}><td>${U.BRANCHES[x.b]}</td><td>${WD.PROVERB[x.b]}</td><td class="${pcls(x.st.avg)}">${pct(x.st.avg)}</td><td>${pct(x.st.med)}</td><td>${x.st.up}/${x.st.n}</td><td>${pct(x.st.max)}／${pct(x.st.min)}</td><td style="min-width:14em" class="hint">${x.list.map(z => `${z.y}:${pct(z.r)}`).join('　')}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="hint" style="margin-top:8px">年は1月〜12月の暦年で十二支を割り当て（立春区切りではありません）、前年末の終値から当年末の終値までの騰落率です。データ開始年と進行中の${Y0}年は除外。出典：${MK.source}、取得日 ${MK.asof}。各十二支のサンプルは6〜7回程度と少なく、統計的に意味のある差とは言えません。投資判断には使わないでください。</p></div>
+  <div class="card"><h3>これから20年の大きな天体の会合</h3><ul class="evlist">${wState.conj.map(c => `<li><span>${WD.fmtFull(c.d)}</span><span class="k"><span class="pill p2">会合</span></span><span>${c.text}<br><span class="hint">${c.note}</span></span></li>`).join('')}</ul>
+    <p class="hint">2日刻みの計算で求めた、黄経が一致する日です（数日の誤差があり得ます）。意味づけは西洋占星術の世相読み（マンデン占星術）での一般的な解釈です。</p></div>`;
+  box.querySelectorAll('[data-y]').forEach(r => r.addEventListener('click', () => { wState.Y = +r.dataset.y; renderWorld(); }));
+  box.querySelectorAll('[data-yy]').forEach(b => b.addEventListener('click', () => { wState.Y = +b.dataset.yy; renderWorld(); }));
+  const ws = $('wSer'); if (ws) ws.addEventListener('change', () => { wState.series = ws.value; renderWorld(); });
+}
 function luckHints(R) {
   const el = R.sc.element, min = Math.min(...el);
   const C = { 0: ['青・緑', '東'], 1: ['赤・紫', '南'], 2: ['黄・茶', '中央（家の中心を整える）'], 3: ['白・金銀', '西'], 4: ['黒・紺', '北'] };
@@ -721,6 +815,7 @@ function paneBasis(R) {
     <li>姓名判断：新字体画数・81数の吉凶は一般的な目安。ひらがな・カタカナの画数にも流派差あり。</li>
     <li>易占い：三枚硬貨法（表3・裏2）。乱数はブラウザの暗号用乱数を使用。卦の解説は本アプリによる要約で、爻辞の原文は未収録。</li>
     <li>タロット：78枚を暗号用乱数でシャッフル（フィッシャー–イェーツ法）し、正逆は各1/2。カードの意味は本アプリによる要約。</li>
+    <li>世の中の暦：食・逆行・星座移動・会合はAstronomy Engineで計算。年のテーマは占術上の一般的な解釈。相場データはTradingViewの年足（日経平均・ドル円・ポンド円）。年表は本アプリによる主要な出来事の抜粋。</li>
     <li>マヤ暦：ドリームスペル方式（2013年7月26日＝KIN164を基準）。</li>
     <li>総合判定・ジャンル別・月別の点数づけと資質の分類は、本アプリ独自の集計方法です（財星＝金運、官星＝仕事・女性の恋愛、財星＝男性の恋愛、木星の通過ハウス、紫微斗数の流年四化の入る宮など、各占術で一般的な対応をもとにしています）。</li>
     <li>月別運勢：月の区切りは節入り。表は各月15日時点の月柱と九星月盤で判定。</li></ul></div>
