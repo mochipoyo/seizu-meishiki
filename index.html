@@ -122,6 +122,23 @@ ul.plain { margin: 0; padding-left: 1.2em } ul.plain li { margin: 2px 0 }
 .mbar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle }
 td.c { text-align: center; white-space: nowrap }
 tr.now td { background: var(--gold-soft) }
+.hexwrap { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start }
+.hexfig { display: grid; gap: 7px; width: 132px; padding: 6px 0 }
+.yao { display: grid; grid-template-columns: 1fr 22px; gap: 8px; align-items: center }
+.yao .bar2 { height: 14px; display: grid; grid-template-columns: 1fr; gap: 0 }
+.yao .bar2.yin { grid-template-columns: 1fr 1fr; column-gap: 18px }
+.yao .bar2 i { background: var(--ink); border-radius: 2px }
+.yao.chg .bar2 i { background: var(--gold) }
+.yao .mk { font-size: 12px; color: var(--gold); font-weight: 700 }
+.yao.empty .bar2 i { background: var(--line) }
+.hexname { font-family: var(--f-display); font-weight: 800; font-size: 26px; line-height: 1.2 }
+.coins { display: flex; gap: 8px; margin: 6px 0 }
+.coin { width: 34px; height: 34px; border-radius: 50%; display: grid; place-content: center; font-size: 12px; font-weight: 700; border: 2px solid var(--gold); color: var(--gold); background: var(--gold-soft) }
+.coin.ura { background: var(--paper); color: var(--ink-2); border-color: var(--line) }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px }
+.btn2 { font: inherit; font-size: 14px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--indigo); background: var(--paper); color: var(--indigo); cursor: pointer }
+.btn2.primary { background: var(--indigo); color: var(--paper) }
+.btn2:disabled { opacity: .45; cursor: default }
 .foot { margin-top: 30px; font-size: 12px; color: var(--mid); max-width: 90ch }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease } }
 </style>
@@ -1149,6 +1166,132 @@ tr.now td { background: var(--gold-soft) }
 
 </script>
 <script>
+/* 易占い（周易・六十四卦）。三枚硬貨法で六爻を立て、本卦・変爻・之卦を出す。
+ * 解説文は易経の一般的な卦意を、本アプリ用に要約して書き下ろしたもの。 */
+(function (root) {
+  'use strict';
+  // 八卦：下から順の爻（1=陽, 0=陰）
+  const TRI = {
+    '乾': { lines: [1, 1, 1], sym: '天', nature: '剛健' }, '兌': { lines: [1, 1, 0], sym: '沢', nature: '喜悦' },
+    '離': { lines: [1, 0, 1], sym: '火', nature: '明知' }, '震': { lines: [1, 0, 0], sym: '雷', nature: '奮起' },
+    '巽': { lines: [0, 1, 1], sym: '風', nature: '浸透' }, '坎': { lines: [0, 1, 0], sym: '水', nature: '険難' },
+    '艮': { lines: [0, 0, 1], sym: '山', nature: '静止' }, '坤': { lines: [0, 0, 0], sym: '地', nature: '柔順' },
+  };
+  // [番号, 卦名, 上卦, 下卦, 一言, 意味, アドバイス, 目安]
+  const HEX = [
+    [1, '乾為天', '乾', '乾', '創造と上昇', '天の力が満ちる最も力強い時。志を立てて進めば大きく伸びる。', '高い目標を掲げて誠実に努力を続ける。ただし驕りは禁物。', '吉'],
+    [2, '坤為地', '坤', '坤', '受容と育成', '大地のように受け入れ、支え、育てる時。先頭に立つより従うことで実る。', '信頼できる人に従い、地道に役目を果たす。', '吉'],
+    [3, '水雷屯', '坎', '震', '生みの苦しみ', '芽が地面を割って出ようとする時。始まりの混乱と困難がある。', '焦って大きく動かず、協力者を得て足場を固める。', '注意'],
+    [4, '山水蒙', '艮', '坎', '未熟と学び', '霧に包まれ先が見えない状態。経験不足からくる迷い。', '素直に教えを請い、学ぶ姿勢を持つ。同じことを何度も占わない。', '平'],
+    [5, '水天需', '坎', '乾', '待つ時', '前に険難があり、今は進む時ではない。必要なものは時が来れば得られる。', '飲食を整え、力を蓄えて時機を待つ。', 'やや吉'],
+    [6, '天水訟', '乾', '坎', '争いと訴え', '意見の対立や争いが起きやすい時。勝っても得るものは少ない。', '争いを長引かせず、第三者を入れて早めに和解を。大きな冒険は避ける。', '注意'],
+    [7, '地水師', '坤', '坎', '統率と組織', '軍を率いるように、組織を動かす時。正しい目的と優れた指揮者が必要。', 'ルールと役割を明確にし、経験ある人に任せる。', '平'],
+    [8, '水地比', '坎', '坤', '親しみ和合', '人と人が親しみ協力する時。仲間に恵まれる。', '早めに輪に加わり、信頼できる人と手を結ぶ。迷って遅れると取り残される。', '吉'],
+    [9, '風天小畜', '巽', '乾', '小さく蓄える', '雲は湧いても雨はまだ降らない。小さな障りで足止めされる。', '大きく動かず、力と実績を少しずつ蓄える。', '平'],
+    [10, '天沢履', '乾', '兌', '虎の尾を踏む', '危うい場面を礼儀と慎重さで渡っていく時。', '目上には礼を尽くし、身の丈を守って一歩ずつ進む。', '平'],
+    [11, '地天泰', '坤', '乾', '安泰と交流', '天地の気が交わり、物事が通じる平和な時。', '好調のうちに次の備えを。順調さに油断しない。', '吉'],
+    [12, '天地否', '乾', '坤', '閉塞', '天地が交わらず、意思が通じにくい時。', '無理に押し通さず、力を温存して時を待つ。小人と組まない。', '注意'],
+    [13, '天火同人', '乾', '離', '志を同じくする', '同じ志の人と広く協力する時。公明正大さが鍵。', '身内びいきをせず、開かれた場で仲間を集める。', '吉'],
+    [14, '火天大有', '離', '乾', '大いに保つ', '太陽が天高く輝き、豊かさに恵まれる時。', '得たものを独り占めせず、善を広め悪を抑える。', '吉'],
+    [15, '地山謙', '坤', '艮', '謙虚', '高い山が地の下にある。謙虚さが最終的な成功を招く。', '実力があっても控えめに。多すぎるところを減らし少ないところに足す。', '吉'],
+    [16, '雷地豫', '震', '坤', '喜びと準備', '雷が地上に出て、物事が動き出す楽しい時。', '準備を整えて機会に乗る。楽しみに溺れすぎない。', 'やや吉'],
+    [17, '沢雷随', '兌', '震', '従う', '時流や良き人に従うことで道が開ける時。', '自分のこだわりを手放し、正しいものに柔軟に従う。', 'やや吉'],
+    [18, '山風蠱', '艮', '巽', '腐敗を正す', '長く放置した問題が表面化する時。立て直しの好機でもある。', '原因をさかのぼって改革に着手する。始める前後をよく考える。', '平'],
+    [19, '地沢臨', '坤', '兌', '臨む・勢いの到来', '春に向かって陽気が増していく時。運気は上り坂。', '積極的に関わり、人を励まして導く。好調の後の下り坂にも備える。', '吉'],
+    [20, '風地観', '巽', '坤', '観る', '風が地上を巡り、広く観察する時。行動より洞察。', '状況と自分自身をよく観察し、手本となる振る舞いを。', '平'],
+    [21, '火雷噬嗑', '離', '震', '噛み砕く', '口の中の邪魔物を噛み砕くように、障害を取り除く時。', '問題をあいまいにせず、筋を通して決着をつける。', 'やや吉'],
+    [22, '山火賁', '艮', '離', '飾る', '美しく飾ることで物事が整う時。ただし外見だけでは足りない。', '体裁を整えるのは小さな事に。大事は中身で勝負する。', '平'],
+    [23, '山地剥', '艮', '坤', '剥がれ落ちる', '陰が盛んになり、土台が崩れていく時。', '動かずに守りを固め、下の者を大切にする。', '注意'],
+    [24, '地雷復', '坤', '震', '回復と再出発', '冬至に陽が戻るように、物事が回復し始める時。', '焦らず、小さな一歩から再スタートする。同じ道を戻るのも吉。', 'やや吉'],
+    [25, '天雷无妄', '乾', '震', '自然体・無作為', '天の理に従う自然な姿勢が求められる時。思わぬ出来事も起こりうる。', '下心や計算を捨て、誠実に。正しくなければ動かない。', '平'],
+    [26, '山天大畜', '艮', '乾', '大いに蓄える', '大きな力を内に蓄える時。学びと実力の蓄積が実る。', '古人の知恵に学び、力を溜めてから大きく動く。', '吉'],
+    [27, '山雷頤', '艮', '震', '養う', '顎で食べるように、心身を正しく養う時。', '言葉と飲食を慎み、何で自分と人を養うかを見直す。', '平'],
+    [28, '沢風大過', '兌', '巽', '大いに過ぎる', '梁がたわむほど負担が大きい時。非常事態。', '抱え込みすぎを認め、思い切った手を打つ。一人で背負わない。', '注意'],
+    [29, '坎為水', '坎', '坎', '重なる険難', '困難が重なる時。ただし誠意を失わなければ通じる。', '水が流れ続けるように、信念を保って同じ努力を続ける。', '注意'],
+    [30, '離為火', '離', '離', '明らかに付く', '火が物に付いて輝くように、正しいものに依って輝く時。', '頼るべき人や原則を見極め、従順な心で明るさを保つ。', 'やや吉'],
+    [31, '沢山咸', '兌', '艮', '感応', '心と心が感じ合う時。恋愛や縁に良い。', '素直な心で相手を受け入れる。損得で動かない。', '吉'],
+    [32, '雷風恒', '震', '巽', '恒常・継続', '変わらない道を続けることで実る時。', '方針をむやみに変えず、続けてきたことを守る。', 'やや吉'],
+    [33, '天山遯', '乾', '艮', '退く', '退くべき時を知る。逃げではなく賢明な撤退。', '深追いせず、距離を置いて身を守る。小さな事なら進めてよい。', '平'],
+    [34, '雷天大壮', '震', '乾', '盛んな勢い', '勢いが非常に強い時。行き過ぎの危険も。', '力に任せず、正しさと礼を守る。猪突猛進は避ける。', 'やや吉'],
+    [35, '火地晋', '離', '坤', '進む・昇る', '日が昇るように、順調に前進し認められる時。', '自分の明るい徳を示し、引き立てに応えて進む。', '吉'],
+    [36, '地火明夷', '坤', '離', '明るさが傷つく', '太陽が地中に沈み、才能が認められにくい時。', '才を隠し、困難の中でも正しさを守って耐える。', '注意'],
+    [37, '風火家人', '巽', '離', '家庭と内側', '家族や組織の内側を整える時。', '身近な人との役割と礼を整える。言葉に中身を、行動に一貫性を。', 'やや吉'],
+    [38, '火沢睽', '離', '兌', '背き合う', '意見が食い違い、すれ違いが起こる時。', '大事は避け、小さな事で共通点を探す。違いを認めて協調する。', '注意'],
+    [39, '水山蹇', '坎', '艮', '行き悩む', '前に険しい川、後ろに山。進むに進めない時。', '無理に突破せず、自分を省みて協力者を求める。', '注意'],
+    [40, '雷水解', '震', '坎', '解ける', '困難が解けて緊張がゆるむ時。', '問題が解けたら速やかに片付け、過去の過ちは許す。', 'やや吉'],
+    [41, '山沢損', '艮', '兌', '減らして益す', '一時的に減らすことが、後の利益になる時。', '欲や無駄を減らし、誠意をもって与える。見返りは後から来る。', '平'],
+    [42, '風雷益', '巽', '震', '増える', '上が下に与え、全体が豊かになる時。積極策が吉。', '良いことは積極的に取り入れ、人のためになる行動を。', '吉'],
+    [43, '沢天夬', '兌', '乾', '決断', '決壊寸前の堤のように、決断すべき時。', '問題ははっきりと公にして断ち切る。ただし力ずくに頼らない。', '平'],
+    [44, '天風姤', '乾', '巽', '思いがけない出会い', '予期せぬ出会いが訪れる時。影響を受けすぎに注意。', '出会いは慎重に見極める。深入りや即決は避ける。', '注意'],
+    [45, '沢地萃', '兌', '坤', '集まる', '人や物が集まり、にぎわう時。', '中心となる目的を持って人を集める。思わぬ事態への備えも。', '吉'],
+    [46, '地風升', '坤', '巽', '昇る', '木が地中から伸びるように、着実に昇っていく時。', '小さな積み重ねで一歩ずつ上へ。目上の助けを求めてよい。', '吉'],
+    [47, '沢水困', '兌', '坎', '困窮', '沢の水が枯れ、行き詰まる時。言葉が信じてもらえない。', '言い訳より行動で示す。困難の中でも志を曲げない。', '注意'],
+    [48, '水風井', '坎', '巽', '井戸', '井戸のように変わらず人を養う源を持つ時。', '基本を手入れし続ける。自分の価値ある資源を人と分かち合う。', '平'],
+    [49, '沢火革', '兌', '離', '改革', '古いものを改め、新しく変える時。', '機が熟したら変える。理由を示して周りの納得を得る。', 'やや吉'],
+    [50, '火風鼎', '離', '巽', '鼎・新しい秩序', '鼎で煮炊きするように、新しいものを育てて定着させる時。', '人材や協力者を得て、新体制を整える。', '吉'],
+    [51, '震為雷', '震', '震', '雷鳴・衝撃', '突然の出来事に驚かされる時。後には笑いがある。', '驚いても慌てず、自分を省みて備える。', '平'],
+    [52, '艮為山', '艮', '艮', '止まる', '山のようにじっと止まる時。', '動くべきでない時は止まり、心を静める。余計なことを言わない。', '平'],
+    [53, '風山漸', '巽', '艮', '徐々に進む', '木が山の上でゆっくり育つように、順を追って進む時。結婚に吉。', '手順を守り、段階を踏んで進める。', '吉'],
+    [54, '雷沢帰妹', '震', '兌', '順序の乱れ', '感情や勢いで、順序を誤りやすい時。', '自分から急がず、立場をわきまえて慎重に。終わりを見据える。', '注意'],
+    [55, '雷火豊', '震', '離', '豊かさの頂点', '物事が盛大で豊かな時。ただし満ちれば欠ける。', '今を憂えず、明るく決断する。好調の後への備えを。', 'やや吉'],
+    [56, '火山旅', '離', '艮', '旅', '旅人のように仮の身で過ごす時。孤独や不安定さ。', '謙虚に振る舞い、小さな事を丁寧に。長居や争いは避ける。', '平'],
+    [57, '巽為風', '巽', '巽', '従い入る', '風のように柔軟に、少しずつ浸透していく時。', '目上や優れた人に従い、繰り返し伝える。迷いすぎに注意。', 'やや吉'],
+    [58, '兌為沢', '兌', '兌', '喜び', '喜びと楽しい交流がある時。', '仲間と語り合い学び合う。口先だけの喜びにしない。', '吉'],
+    [59, '風水渙', '巽', '坎', '散らす', '風が水面を吹き散らすように、わだかまりが解ける時。人心は離れやすい。', '中心となる信念や目標で、散ったものを再びまとめる。', '平'],
+    [60, '水沢節', '坎', '兌', '節度', '竹の節のように、ほどよい区切りと節度が必要な時。', '使いすぎ・やりすぎを控える。ただし厳しすぎる節制は続かない。', '平'],
+    [61, '風沢中孚', '巽', '兌', '誠', '真心が相手に通じる時。', '誠意を尽くせば、通じにくい相手にも届く。', '吉'],
+    [62, '雷山小過', '震', '艮', '少し過ぎる', '小さな事は良いが、大きな事は控える時。', '高望みせず、控えめに。小さな行き届きを大切に。', '平'],
+    [63, '水火既済', '坎', '離', '完成', '物事が一応整った時。ここから乱れが始まりやすい。', '完成後こそ油断せず、守りを固めて備える。', 'やや吉'],
+    [64, '火水未済', '離', '坎', '未完成', 'まだ整っていないが、これから成る可能性を秘めた時。', '最後の詰めを慎重に。見極めてから渡る。', '平'],
+  ];
+  const LINE_POS = ['初爻（始まり・まだ下積みの段階）', '二爻（内側で実力を蓄える位置）', '三爻（内から外への境目。危うさを伴う）', '四爻（外に出たばかり。上との関係が鍵）', '五爻（中心。最も力を発揮する君主の位置）', '上爻（極まり。行き過ぎや引き際）'];
+  const CATEGORY = {
+    general: '全体', work: '仕事', love: '恋愛・結婚', money: 'お金', relation: '人間関係', health: '健康',
+  };
+  const CAT_TIP = {
+    work: { '吉': '仕事は前に進めてよい流れ。提案や挑戦を。', 'やや吉': '仕事は準備を整えてから進めると吉。', '平': '仕事は現状維持で足元を固めて。', '注意': '仕事は判断を急がず、守りを優先して。' },
+    love: { '吉': '気持ちを伝える・関係を深めるのに良い時。', 'やや吉': '相手のペースに合わせると縁が育つ。', '平': '焦らず、自然な関係づくりを。', '注意': '誤解やすれ違いに注意。結論を急がないで。' },
+    money: { '吉': 'お金の巡りは良好。ただし使い道は計画的に。', 'やや吉': '小さく試してから広げると吉。', '平': '大きな出費や勝負は控えめに。', '注意': '出費・損失に注意。新しい話は見送りを。' },
+    relation: { '吉': '人との協力で道が開ける。', 'やや吉': '礼を尽くすと信頼が深まる。', '平': '距離感を大切に、無理に広げない。', '注意': '対立に巻き込まれないよう言葉を慎重に。' },
+    health: { '吉': '活動的に過ごしてよい流れ。', 'やや吉': '生活リズムを整えると調子が上がる。', '平': '無理をせず、休息を意識して。', '注意': '疲れをためないように。気になる症状は医療機関へ。' },
+  };
+
+  const key = (u, l) => u + l;
+  const BY = {};
+  HEX.forEach(h => { BY[key(h[2], h[3])] = h; });
+  const triOf = arr => Object.keys(TRI).find(k => TRI[k].lines.join() === arr.join());
+  function hexFromLines(bits) { // bits: 下から6つ（1=陽）
+    const lower = triOf(bits.slice(0, 3)), upper = triOf(bits.slice(3, 6));
+    const h = BY[key(upper, lower)];
+    return { no: h[0], name: h[1], upper, lower, keyword: h[4], meaning: h[5], advice: h[6], luck: h[7], bits };
+  }
+  // 三枚硬貨：表=3, 裏=2。合計 6 老陰（変）/7 少陽/8 少陰/9 老陽（変）
+  function randInt2() { const a = new Uint32Array(1); (root.crypto || globalThis.crypto).getRandomValues(a); return a[0] & 1; }
+  function tossLine() { const coins = [randInt2(), randInt2(), randInt2()]; const v = coins.reduce((s, c) => s + (c ? 3 : 2), 0); return { coins, value: v }; }
+  function reading(values, category) {
+    const bits = values.map(v => (v === 7 || v === 9) ? 1 : 0);
+    const changing = values.map((v, i) => (v === 6 || v === 9) ? i : -1).filter(i => i >= 0);
+    const hon = hexFromLines(bits);
+    const to = changing.length ? hexFromLines(bits.map((b, i) => changing.includes(i) ? 1 - b : b)) : null;
+    const n = changing.length;
+    const focus = n === 0 ? '変爻がないため、本卦そのものが答えです。状況は当面大きく動きません。'
+      : n === 1 ? `変爻は1つ（${LINE_POS[changing[0]]}）。本卦のこの爻が今回の要点です。`
+      : n === 2 ? `変爻は2つ。上にある${LINE_POS[changing[1]].split('（')[0]}を主に、本卦の流れを読みます。`
+      : n === 3 ? '変爻は3つ。本卦（現状）と之卦（行く先）を同じ重さで読みます。変化の途中にあります。'
+      : n <= 5 ? `変爻が${n}つと多く、状況は大きく変わろうとしています。之卦（行く先）を主に読みます。`
+      : hon.no === 1 ? '六爻すべてが変化（用九）。強さを誇らず、人の上に立とうとしなければ吉とされます。'
+      : hon.no === 2 ? '六爻すべてが変化（用六）。柔順さを長く貫けば吉とされます。'
+      : '六爻すべてが変化。現状とは正反対の状況（之卦）へ移る兆しです。';
+    const main = n >= 4 && to ? to : hon;
+    const tip = category && CAT_TIP[category] ? CAT_TIP[category][main.luck] : null;
+    return { values, bits, changing, hon, to, focus, main, tip, category };
+  }
+  root.Ekikyo = { TRI, HEX, LINE_POS, CATEGORY, tossLine, reading, hexFromLines };
+  if (typeof module !== 'undefined' && module.exports) module.exports = root.Ekikyo;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
 (function () {
 'use strict';
 const U = window.Uranai, D = window.UData;
@@ -1250,14 +1393,14 @@ function synth(R) {
 }
 
 // ---------- 描画 ----------
-const TABS = [['sogo', '総合判定'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
+const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
 let current = 'sogo';
 try { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h)) current = h; } catch (e) { }
 
 function render(R) {
   const S = synth(R);
   const panes = {
-    sogo: paneSogo(R, S), genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
+    sogo: paneSogo(R, S), eki: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
     rokusei: paneRoku(R), gosei: paneGosei(R), num: paneNum(R), seimei: paneSeimei(R), shuku: paneShuku(R), basis: paneBasis(R)
   };
   $('out').innerHTML = `<div class="tabs" role="tablist">${TABS.map(([k, n]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${k === current}" data-k="${k}">${n}</button>`).join('')}</div>` +
@@ -1265,6 +1408,7 @@ function render(R) {
   $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); }));
   $('out').querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); $('tab-' + a.dataset.goto).click(); window.scrollTo({ top: $('out').offsetTop - 10 }); }));
   $('out').querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const el = $(a.dataset.jump); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+  renderEki();
   const st = $('strokeEdit'); if (st) st.addEventListener('change', e => { const c = e.target.dataset.c; if (c) { if (e.target.value) overrides[c] = +e.target.value; else delete overrides[c]; run(); } });
 }
 
@@ -1350,6 +1494,70 @@ function paneMonthly(R) {
   <div class="card"><div class="tablewrap"><table><thead><tr><th>月</th><th>総合</th><th>月の干支</th><th>九星の宮</th><th class="c">金運</th><th class="c">仕事</th><th class="c">恋愛</th><th>ひとこと</th></tr></thead><tbody>
   ${ms.map(m => { const t = D.TSUHEN_YEAR[m.tsuhen]; return `<tr class="${m.m === nowM ? 'now' : ''}"><td style="white-space:nowrap"><b>${m.m}月</b></td><td>${pill(m.score)}<br><span class="mbar" style="width:${(m.score + 2) * 12 + 4}px;background:${col(m.score)}"></span></td><td style="white-space:nowrap">${m.name}<br><span class="hint">${m.tsuhen}・${m.unsei}${m.kubou ? '・天中殺月' : ''}</span></td><td style="white-space:nowrap">${m.palName}</td><td class="c">${mk(m.money)}</td><td class="c">${mk(m.work)}</td><td class="c">${mk(m.love)}</td><td style="min-width:16em"><b>${t[0].replace('の年', '')}</b>　${t[1].split('。')[0]}。九星では${D.PALACE_YEAR[m.palace][1].split('。')[0]}。${m.kubou ? '天中殺の月なので、新しい契約や大きな決断は慎重に。' : ''}</td></tr>`; }).join('')}
   </tbody></table></div></div>`;
+}
+// ---------- 今日の易 ----------
+const EK = window.Ekikyo;
+const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function ekLoad() { try { return JSON.parse(localStorage.getItem('uranai-eki') || '{}'); } catch (e) { return {}; } }
+function ekSave(db) { try { localStorage.setItem('uranai-eki', JSON.stringify(db)); } catch (e) { } }
+let ekState = { values: [], coins: [], q: '', cat: 'general', extra: false };
+function hexFig(values, opts = {}) {
+  const lines = [];
+  for (let i = 5; i >= 0; i--) {
+    const v = values[i];
+    if (v === undefined) { lines.push(`<div class="yao empty"><div class="bar2"><i></i></div><span></span></div>`); continue; }
+    const yang = opts.after ? (opts.after[i] === 1) : (v === 7 || v === 9);
+    const chg = !opts.after && (v === 6 || v === 9);
+    lines.push(`<div class="yao ${chg ? 'chg' : ''}"><div class="bar2 ${yang ? '' : 'yin'}">${yang ? '<i></i>' : '<i></i><i></i>'}</div><span class="mk">${chg ? (v === 9 ? '○' : '×') : ''}</span></div>`);
+  }
+  return `<div class="hexfig" role="img" aria-label="卦の図">${lines.join('')}</div>`;
+}
+const luckPill = l => `<span class="pill ${l === '吉' ? 'p2' : l === 'やや吉' ? 'p1' : l === '平' ? 'p0' : 'pm1'}">${l}</span>`;
+function hexBlock(h, label) {
+  return `<div style="min-width:0;flex:1 1 260px"><div class="eyebrow">${label}</div><div class="hexname">${h.name}</div>
+    <div class="hint">第${h.no}卦　上卦 ${h.upper}（${EK.TRI[h.upper].sym}・${EK.TRI[h.upper].nature}）／下卦 ${h.lower}（${EK.TRI[h.lower].sym}・${EK.TRI[h.lower].nature}）</div>
+    <p style="margin:8px 0 4px"><b>${h.keyword}</b>　${luckPill(h.luck)}</p><p style="margin:0">${h.meaning}</p><p style="margin:6px 0 0"><b>指針：</b>${h.advice}</p></div>`;
+}
+function readingHtml(rec) {
+  const r = EK.reading(rec.values, rec.cat);
+  return `<div class="hexwrap">${hexFig(rec.values)}${hexBlock(r.hon, '本卦（いまの状況）')}</div>
+    ${r.to ? `<div class="hexwrap" style="margin-top:16px">${hexFig(rec.values, { after: r.to.bits })}${hexBlock(r.to, '之卦（変化の行く先）')}</div>` : ''}
+    <div class="advice" style="margin-top:14px"><b>読み方</b>　${r.focus}${r.changing.length && r.changing.length <= 2 ? `<br>${r.changing.map(i => EK.LINE_POS[i]).join('、')}に変化があり、その段階で動きが起きていることを示します。` : ''}${r.tip ? `<br><b>${EK.CATEGORY[rec.cat]}について</b>　${r.tip}` : ''}</div>`;
+}
+function renderEki() {
+  const box = $('pane-eki'); if (!box) return;
+  const db = ekLoad(), tk = todayKey(), today = db[tk] || [];
+  const casting = ekState.values.length > 0 && ekState.values.length < 6;
+  const showForm = !today.length || ekState.extra || casting;
+  const last = ekState.coins[ekState.coins.length - 1];
+  const hist = Object.keys(db).sort().reverse().filter(k => k !== tk).slice(0, 14);
+  box.innerHTML = `
+  <div class="card"><div class="eyebrow">易占い（周易）</div><h2>${today.length && !showForm ? '今日の一卦' : '今日の卦を立てる'}</h2>
+    <p class="lead">心を静めて問いを一つ思い浮かべ、硬貨を6回投げます。下の爻から順に積み上がり、六十四卦のどれかになります。結果はこのブラウザに日付ごとに残ります。</p></div>
+  ${showForm ? `<div class="card">
+    <div class="row2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);margin-bottom:12px">
+      <label>占いたいこと（任意）<input id="ekQ" value="${esc(ekState.q)}" placeholder="例：今日の商談をどう進めるか" ${casting ? 'disabled' : ''}></label>
+      <label>分野<select id="ekCat" ${casting ? 'disabled' : ''}>${Object.entries(EK.CATEGORY).map(([k, v]) => `<option value="${k}" ${ekState.cat === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    </div>
+    <div class="hexwrap"><div>${hexFig(ekState.values)}<div class="hint">${ekState.values.length}／6 爻</div></div>
+      <div style="flex:1 1 220px;min-width:0">${last ? `<div class="hint">${ekState.values.length}回目</div><div class="coins">${last.coins.map(c => `<span class="coin ${c ? '' : 'ura'}">${c ? '表' : '裏'}</span>`).join('')}</div><p style="margin:0">合計 ${last.value}：${{ 6: '老陰（陰・変化する）', 7: '少陽（陽）', 8: '少陰（陰）', 9: '老陽（陽・変化する）' }[last.value]}</p>` : '<p class="hint" style="margin:0">表を3、裏を2として3枚の合計で一本の爻を決めます。6と9は「変爻」で、陰陽が反転して之卦を作ります。</p>'}
+        <div class="btnrow" style="margin-top:14px"><button type="button" class="btn2 primary" id="ekToss">硬貨を投げる（${ekState.values.length + 1}回目）</button><button type="button" class="btn2" id="ekAll">残りをまとめて投げる</button>${ekState.extra && !casting ? '<button type="button" class="btn2" id="ekCancel">やめる</button>' : ''}</div></div></div>
+  </div>` : ''}
+  ${today.map((rec, i) => `<div class="card"><div class="eyebrow">${tk.replace(/-/g, '/')}　${i === 0 ? '今日の一卦' : `${i + 1}つ目の問い`}　${rec.q ? '「' + esc(rec.q) + '」' : ''}（${EK.CATEGORY[rec.cat]}）</div>${readingHtml(rec)}</div>`).join('')}
+  ${today.length && !showForm ? `<div class="btnrow"><button type="button" class="btn2" id="ekMore">別の問いを占う</button></div><p class="hint">易では同じ問いを何度も占わないのが作法とされます（山水蒙）。別の問いがあるときに使ってください。</p>` : ''}
+  ${hist.length ? `<div class="card"><h3>これまでの卦</h3><div class="tablewrap"><table><tbody>${hist.map(k => db[k].map((rec, i) => { const r = EK.reading(rec.values, rec.cat); return `<tr><td style="white-space:nowrap">${i === 0 ? k.replace(/-/g, '/') : ''}</td><td style="white-space:nowrap"><b>${r.hon.name}</b>${r.to ? ' → ' + r.to.name : ''}</td><td>${luckPill(r.main.luck)}</td><td>${rec.q ? esc(rec.q) : EK.CATEGORY[rec.cat]}</td></tr>`; }).join('')).join('')}</tbody></table></div><p class="hint">記録はこのブラウザだけに保存され、ほかの端末とは共有されません。</p></div>` : ''}
+  <p class="hint">卦の解説は易経の一般的な卦意を本アプリ用に要約したもので、384の爻辞（各爻の原文）は収録していません。変爻については位置の意味と読み方の原則（朱熹の説に基づく一般的な方法）を示しています。</p>`;
+  const q = $('ekQ'), cat = $('ekCat');
+  if (q) q.addEventListener('input', () => ekState.q = q.value);
+  if (cat) cat.addEventListener('change', () => ekState.cat = cat.value);
+  const toss = n => { for (let i = 0; i < n && ekState.values.length < 6; i++) { const t = EK.tossLine(); ekState.values.push(t.value); ekState.coins.push(t); }
+    if (ekState.values.length === 6) { const d = ekLoad(); (d[tk] = d[tk] || []).push({ values: ekState.values, q: ekState.q.trim(), cat: ekState.cat, ts: Date.now() }); ekSave(d); ekState = { values: [], coins: [], q: '', cat: 'general', extra: false }; }
+    renderEki(); };
+  const b1 = $('ekToss'), b2 = $('ekAll'), b3 = $('ekMore'), b4 = $('ekCancel');
+  if (b1) b1.addEventListener('click', () => toss(1));
+  if (b2) b2.addEventListener('click', () => toss(6));
+  if (b3) b3.addEventListener('click', () => { ekState.extra = true; renderEki(); });
+  if (b4) b4.addEventListener('click', () => { ekState.extra = false; renderEki(); });
 }
 function luckHints(R) {
   const el = R.sc.element, min = Math.min(...el);
@@ -1512,6 +1720,7 @@ function paneBasis(R) {
     <li>六星占術：星数＝生まれ日の干支番号。星と大殺界の対応は、公式発表（2024年の大殺界＝天王星人±・木星人−、細木数子氏＝土星人＋）と一致することを確認。年の区切りは1月1日として計算。</li>
     <li>九星気学：年は立春、月は節入りで区切る。吉方位は本命星基準の簡易判定。</li>
     <li>姓名判断：新字体画数・81数の吉凶は一般的な目安。ひらがな・カタカナの画数にも流派差あり。</li>
+    <li>易占い：三枚硬貨法（表3・裏2）。乱数はブラウザの暗号用乱数を使用。卦の解説は本アプリによる要約で、爻辞の原文は未収録。</li>
     <li>マヤ暦：ドリームスペル方式（2013年7月26日＝KIN164を基準）。</li>
     <li>総合判定・ジャンル別・月別の点数づけと資質の分類は、本アプリ独自の集計方法です（財星＝金運、官星＝仕事・女性の恋愛、財星＝男性の恋愛、木星の通過ハウス、紫微斗数の流年四化の入る宮など、各占術で一般的な対応をもとにしています）。</li>
     <li>月別運勢：月の区切りは節入り。表は各月15日時点の月柱と九星月盤で判定。</li></ul></div>

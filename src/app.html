@@ -111,6 +111,23 @@ ul.plain { margin: 0; padding-left: 1.2em } ul.plain li { margin: 2px 0 }
 .mbar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle }
 td.c { text-align: center; white-space: nowrap }
 tr.now td { background: var(--gold-soft) }
+.hexwrap { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start }
+.hexfig { display: grid; gap: 7px; width: 132px; padding: 6px 0 }
+.yao { display: grid; grid-template-columns: 1fr 22px; gap: 8px; align-items: center }
+.yao .bar2 { height: 14px; display: grid; grid-template-columns: 1fr; gap: 0 }
+.yao .bar2.yin { grid-template-columns: 1fr 1fr; column-gap: 18px }
+.yao .bar2 i { background: var(--ink); border-radius: 2px }
+.yao.chg .bar2 i { background: var(--gold) }
+.yao .mk { font-size: 12px; color: var(--gold); font-weight: 700 }
+.yao.empty .bar2 i { background: var(--line) }
+.hexname { font-family: var(--f-display); font-weight: 800; font-size: 26px; line-height: 1.2 }
+.coins { display: flex; gap: 8px; margin: 6px 0 }
+.coin { width: 34px; height: 34px; border-radius: 50%; display: grid; place-content: center; font-size: 12px; font-weight: 700; border: 2px solid var(--gold); color: var(--gold); background: var(--gold-soft) }
+.coin.ura { background: var(--paper); color: var(--ink-2); border-color: var(--line) }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px }
+.btn2 { font: inherit; font-size: 14px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--indigo); background: var(--paper); color: var(--indigo); cursor: pointer }
+.btn2.primary { background: var(--indigo); color: var(--paper) }
+.btn2:disabled { opacity: .45; cursor: default }
 .foot { margin-top: 30px; font-size: 12px; color: var(--mid); max-width: 90ch }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease } }
 </style>
@@ -177,6 +194,7 @@ tr.now td { background: var(--gold-soft) }
 <script>/*ENGINE*/</script>
 <script>/*DATA*/</script>
 <script>/*GENRE*/</script>
+<script>/*EKIKYO*/</script>
 <script>
 (function () {
 'use strict';
@@ -279,14 +297,14 @@ function synth(R) {
 }
 
 // ---------- 描画 ----------
-const TABS = [['sogo', '総合判定'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
+const TABS = [['sogo', '総合判定'], ['eki', '今日の易'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
 let current = 'sogo';
 try { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h)) current = h; } catch (e) { }
 
 function render(R) {
   const S = synth(R);
   const panes = {
-    sogo: paneSogo(R, S), genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
+    sogo: paneSogo(R, S), eki: '', genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
     rokusei: paneRoku(R), gosei: paneGosei(R), num: paneNum(R), seimei: paneSeimei(R), shuku: paneShuku(R), basis: paneBasis(R)
   };
   $('out').innerHTML = `<div class="tabs" role="tablist">${TABS.map(([k, n]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${k === current}" data-k="${k}">${n}</button>`).join('')}</div>` +
@@ -294,6 +312,7 @@ function render(R) {
   $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); }));
   $('out').querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); $('tab-' + a.dataset.goto).click(); window.scrollTo({ top: $('out').offsetTop - 10 }); }));
   $('out').querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const el = $(a.dataset.jump); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+  renderEki();
   const st = $('strokeEdit'); if (st) st.addEventListener('change', e => { const c = e.target.dataset.c; if (c) { if (e.target.value) overrides[c] = +e.target.value; else delete overrides[c]; run(); } });
 }
 
@@ -379,6 +398,70 @@ function paneMonthly(R) {
   <div class="card"><div class="tablewrap"><table><thead><tr><th>月</th><th>総合</th><th>月の干支</th><th>九星の宮</th><th class="c">金運</th><th class="c">仕事</th><th class="c">恋愛</th><th>ひとこと</th></tr></thead><tbody>
   ${ms.map(m => { const t = D.TSUHEN_YEAR[m.tsuhen]; return `<tr class="${m.m === nowM ? 'now' : ''}"><td style="white-space:nowrap"><b>${m.m}月</b></td><td>${pill(m.score)}<br><span class="mbar" style="width:${(m.score + 2) * 12 + 4}px;background:${col(m.score)}"></span></td><td style="white-space:nowrap">${m.name}<br><span class="hint">${m.tsuhen}・${m.unsei}${m.kubou ? '・天中殺月' : ''}</span></td><td style="white-space:nowrap">${m.palName}</td><td class="c">${mk(m.money)}</td><td class="c">${mk(m.work)}</td><td class="c">${mk(m.love)}</td><td style="min-width:16em"><b>${t[0].replace('の年', '')}</b>　${t[1].split('。')[0]}。九星では${D.PALACE_YEAR[m.palace][1].split('。')[0]}。${m.kubou ? '天中殺の月なので、新しい契約や大きな決断は慎重に。' : ''}</td></tr>`; }).join('')}
   </tbody></table></div></div>`;
+}
+// ---------- 今日の易 ----------
+const EK = window.Ekikyo;
+const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function ekLoad() { try { return JSON.parse(localStorage.getItem('uranai-eki') || '{}'); } catch (e) { return {}; } }
+function ekSave(db) { try { localStorage.setItem('uranai-eki', JSON.stringify(db)); } catch (e) { } }
+let ekState = { values: [], coins: [], q: '', cat: 'general', extra: false };
+function hexFig(values, opts = {}) {
+  const lines = [];
+  for (let i = 5; i >= 0; i--) {
+    const v = values[i];
+    if (v === undefined) { lines.push(`<div class="yao empty"><div class="bar2"><i></i></div><span></span></div>`); continue; }
+    const yang = opts.after ? (opts.after[i] === 1) : (v === 7 || v === 9);
+    const chg = !opts.after && (v === 6 || v === 9);
+    lines.push(`<div class="yao ${chg ? 'chg' : ''}"><div class="bar2 ${yang ? '' : 'yin'}">${yang ? '<i></i>' : '<i></i><i></i>'}</div><span class="mk">${chg ? (v === 9 ? '○' : '×') : ''}</span></div>`);
+  }
+  return `<div class="hexfig" role="img" aria-label="卦の図">${lines.join('')}</div>`;
+}
+const luckPill = l => `<span class="pill ${l === '吉' ? 'p2' : l === 'やや吉' ? 'p1' : l === '平' ? 'p0' : 'pm1'}">${l}</span>`;
+function hexBlock(h, label) {
+  return `<div style="min-width:0;flex:1 1 260px"><div class="eyebrow">${label}</div><div class="hexname">${h.name}</div>
+    <div class="hint">第${h.no}卦　上卦 ${h.upper}（${EK.TRI[h.upper].sym}・${EK.TRI[h.upper].nature}）／下卦 ${h.lower}（${EK.TRI[h.lower].sym}・${EK.TRI[h.lower].nature}）</div>
+    <p style="margin:8px 0 4px"><b>${h.keyword}</b>　${luckPill(h.luck)}</p><p style="margin:0">${h.meaning}</p><p style="margin:6px 0 0"><b>指針：</b>${h.advice}</p></div>`;
+}
+function readingHtml(rec) {
+  const r = EK.reading(rec.values, rec.cat);
+  return `<div class="hexwrap">${hexFig(rec.values)}${hexBlock(r.hon, '本卦（いまの状況）')}</div>
+    ${r.to ? `<div class="hexwrap" style="margin-top:16px">${hexFig(rec.values, { after: r.to.bits })}${hexBlock(r.to, '之卦（変化の行く先）')}</div>` : ''}
+    <div class="advice" style="margin-top:14px"><b>読み方</b>　${r.focus}${r.changing.length && r.changing.length <= 2 ? `<br>${r.changing.map(i => EK.LINE_POS[i]).join('、')}に変化があり、その段階で動きが起きていることを示します。` : ''}${r.tip ? `<br><b>${EK.CATEGORY[rec.cat]}について</b>　${r.tip}` : ''}</div>`;
+}
+function renderEki() {
+  const box = $('pane-eki'); if (!box) return;
+  const db = ekLoad(), tk = todayKey(), today = db[tk] || [];
+  const casting = ekState.values.length > 0 && ekState.values.length < 6;
+  const showForm = !today.length || ekState.extra || casting;
+  const last = ekState.coins[ekState.coins.length - 1];
+  const hist = Object.keys(db).sort().reverse().filter(k => k !== tk).slice(0, 14);
+  box.innerHTML = `
+  <div class="card"><div class="eyebrow">易占い（周易）</div><h2>${today.length && !showForm ? '今日の一卦' : '今日の卦を立てる'}</h2>
+    <p class="lead">心を静めて問いを一つ思い浮かべ、硬貨を6回投げます。下の爻から順に積み上がり、六十四卦のどれかになります。結果はこのブラウザに日付ごとに残ります。</p></div>
+  ${showForm ? `<div class="card">
+    <div class="row2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);margin-bottom:12px">
+      <label>占いたいこと（任意）<input id="ekQ" value="${esc(ekState.q)}" placeholder="例：今日の商談をどう進めるか" ${casting ? 'disabled' : ''}></label>
+      <label>分野<select id="ekCat" ${casting ? 'disabled' : ''}>${Object.entries(EK.CATEGORY).map(([k, v]) => `<option value="${k}" ${ekState.cat === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+    </div>
+    <div class="hexwrap"><div>${hexFig(ekState.values)}<div class="hint">${ekState.values.length}／6 爻</div></div>
+      <div style="flex:1 1 220px;min-width:0">${last ? `<div class="hint">${ekState.values.length}回目</div><div class="coins">${last.coins.map(c => `<span class="coin ${c ? '' : 'ura'}">${c ? '表' : '裏'}</span>`).join('')}</div><p style="margin:0">合計 ${last.value}：${{ 6: '老陰（陰・変化する）', 7: '少陽（陽）', 8: '少陰（陰）', 9: '老陽（陽・変化する）' }[last.value]}</p>` : '<p class="hint" style="margin:0">表を3、裏を2として3枚の合計で一本の爻を決めます。6と9は「変爻」で、陰陽が反転して之卦を作ります。</p>'}
+        <div class="btnrow" style="margin-top:14px"><button type="button" class="btn2 primary" id="ekToss">硬貨を投げる（${ekState.values.length + 1}回目）</button><button type="button" class="btn2" id="ekAll">残りをまとめて投げる</button>${ekState.extra && !casting ? '<button type="button" class="btn2" id="ekCancel">やめる</button>' : ''}</div></div></div>
+  </div>` : ''}
+  ${today.map((rec, i) => `<div class="card"><div class="eyebrow">${tk.replace(/-/g, '/')}　${i === 0 ? '今日の一卦' : `${i + 1}つ目の問い`}　${rec.q ? '「' + esc(rec.q) + '」' : ''}（${EK.CATEGORY[rec.cat]}）</div>${readingHtml(rec)}</div>`).join('')}
+  ${today.length && !showForm ? `<div class="btnrow"><button type="button" class="btn2" id="ekMore">別の問いを占う</button></div><p class="hint">易では同じ問いを何度も占わないのが作法とされます（山水蒙）。別の問いがあるときに使ってください。</p>` : ''}
+  ${hist.length ? `<div class="card"><h3>これまでの卦</h3><div class="tablewrap"><table><tbody>${hist.map(k => db[k].map((rec, i) => { const r = EK.reading(rec.values, rec.cat); return `<tr><td style="white-space:nowrap">${i === 0 ? k.replace(/-/g, '/') : ''}</td><td style="white-space:nowrap"><b>${r.hon.name}</b>${r.to ? ' → ' + r.to.name : ''}</td><td>${luckPill(r.main.luck)}</td><td>${rec.q ? esc(rec.q) : EK.CATEGORY[rec.cat]}</td></tr>`; }).join('')).join('')}</tbody></table></div><p class="hint">記録はこのブラウザだけに保存され、ほかの端末とは共有されません。</p></div>` : ''}
+  <p class="hint">卦の解説は易経の一般的な卦意を本アプリ用に要約したもので、384の爻辞（各爻の原文）は収録していません。変爻については位置の意味と読み方の原則（朱熹の説に基づく一般的な方法）を示しています。</p>`;
+  const q = $('ekQ'), cat = $('ekCat');
+  if (q) q.addEventListener('input', () => ekState.q = q.value);
+  if (cat) cat.addEventListener('change', () => ekState.cat = cat.value);
+  const toss = n => { for (let i = 0; i < n && ekState.values.length < 6; i++) { const t = EK.tossLine(); ekState.values.push(t.value); ekState.coins.push(t); }
+    if (ekState.values.length === 6) { const d = ekLoad(); (d[tk] = d[tk] || []).push({ values: ekState.values, q: ekState.q.trim(), cat: ekState.cat, ts: Date.now() }); ekSave(d); ekState = { values: [], coins: [], q: '', cat: 'general', extra: false }; }
+    renderEki(); };
+  const b1 = $('ekToss'), b2 = $('ekAll'), b3 = $('ekMore'), b4 = $('ekCancel');
+  if (b1) b1.addEventListener('click', () => toss(1));
+  if (b2) b2.addEventListener('click', () => toss(6));
+  if (b3) b3.addEventListener('click', () => { ekState.extra = true; renderEki(); });
+  if (b4) b4.addEventListener('click', () => { ekState.extra = false; renderEki(); });
 }
 function luckHints(R) {
   const el = R.sc.element, min = Math.min(...el);
@@ -541,6 +624,7 @@ function paneBasis(R) {
     <li>六星占術：星数＝生まれ日の干支番号。星と大殺界の対応は、公式発表（2024年の大殺界＝天王星人±・木星人−、細木数子氏＝土星人＋）と一致することを確認。年の区切りは1月1日として計算。</li>
     <li>九星気学：年は立春、月は節入りで区切る。吉方位は本命星基準の簡易判定。</li>
     <li>姓名判断：新字体画数・81数の吉凶は一般的な目安。ひらがな・カタカナの画数にも流派差あり。</li>
+    <li>易占い：三枚硬貨法（表3・裏2）。乱数はブラウザの暗号用乱数を使用。卦の解説は本アプリによる要約で、爻辞の原文は未収録。</li>
     <li>マヤ暦：ドリームスペル方式（2013年7月26日＝KIN164を基準）。</li>
     <li>総合判定・ジャンル別・月別の点数づけと資質の分類は、本アプリ独自の集計方法です（財星＝金運、官星＝仕事・女性の恋愛、財星＝男性の恋愛、木星の通過ハウス、紫微斗数の流年四化の入る宮など、各占術で一般的な対応をもとにしています）。</li>
     <li>月別運勢：月の区切りは節入り。表は各月15日時点の月柱と九星月盤で判定。</li></ul></div>
