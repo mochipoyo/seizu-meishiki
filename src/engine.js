@@ -495,6 +495,22 @@
     return { kin, seal: (kin - 1) % 20, tone: (kin - 1) % 13 + 1, feb29: isFeb29 };
   }
 
-  const api = { STEMS, BRANCHES, ELN, TSUHEN, SHUSEI, JUSEI, UNSEI, KYUSEI, SIGNS, SIGN_GLYPH, PALACES, SHUKU, ROKU_CYCLE, GOSEI, PALACE_DIR, kanshi, mod, jdn, fromJdn, dayIndex, prepare, shichu, annualShichu, sanmei, rokusei, gosei, kyusei, kyuseiYear, toLunar, lunarYearMonths, shibi, shibiYear, sukuyo, western, westernYear, angles, numerology, seimei, loadStrokes, strokeOf, maya, fmtJst, eclLon, signOf, fmtDeg, risshun, honmeiOf };
+  // ---------- 月ごとの運勢（指定日時の月柱・月盤） ----------
+  function monthAt(sc, ky, date) {
+    const y0 = date.getUTCFullYear();
+    const gy = date < risshun(y0) ? y0 - 1 : y0; // 立春年
+    const yIdx = mod(gy - 4, 60);
+    const mOff = Math.floor(mod(sunLon(date) - 315, 360) / 30); // 0=寅月
+    const mBr = mod(2 + mOff, 12), mStem = mod((yIdx % 10) * 2 + 2 + mOff, 10);
+    const idx = idxFromSB(mStem, mBr);
+    const hon = honmeiOf(gy);
+    const start = [1, 4, 7].includes(hon) ? 8 : [3, 6, 9].includes(hon) ? 5 : 2;
+    const center = n9(start - mOff);
+    const ds = sc.dayStem;
+    return { name: kanshi(idx), stem: mStem, branch: mBr, tsuhen: TSUHEN[tsuhen(ds, mStem)], unsei: UNSEI[unsei(ds, mBr)], kubou: sc.kubouIdx.includes(mBr), center, palace: palaceOf(ky.honmei, center), yearStem: yIdx % 10 };
+  }
+  const tsuhenOf = (ds, s) => TSUHEN[tsuhen(ds, s)];
+
+  const api = { monthAt, tsuhenOf, palaceOf, BR_EL, STEM_EL, STEMS, BRANCHES, ELN, TSUHEN, SHUSEI, JUSEI, UNSEI, KYUSEI, SIGNS, SIGN_GLYPH, PALACES, SHUKU, ROKU_CYCLE, GOSEI, PALACE_DIR, kanshi, mod, jdn, fromJdn, dayIndex, prepare, shichu, annualShichu, sanmei, rokusei, gosei, kyusei, kyuseiYear, toLunar, lunarYearMonths, shibi, shibiYear, sukuyo, western, westernYear, angles, numerology, seimei, loadStrokes, strokeOf, maya, fmtJst, eclLon, signOf, fmtDeg, risshun, honmeiOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Uranai = api;
 })(typeof window !== 'undefined' ? window : globalThis);

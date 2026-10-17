@@ -15,8 +15,9 @@
 - `src/app.html` 画面（HTML・CSS・画面用のスクリプト）
 - `src/engine.js` 計算エンジン（暦・天体・各占術）
 - `src/data.js` 表示する文言
+- `src/genre.js` ジャンル別（金運・仕事運・恋愛運など）と月別運勢の分析
 - `src/strokes.txt` 漢字の画数データ
-- `build.py` 上の4つを1枚の `index.html` にまとめるスクリプト
+- `build.py` 上の5つを1枚の `index.html` にまとめるスクリプト
 
 `index.html` は直接編集せず、`src/` を直してから次を実行してください。
 

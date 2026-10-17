@@ -93,6 +93,24 @@ th { font-weight: 500; color: var(--ink-2); font-size: 12.5px; white-space: nowr
 .strokes input { width: 4em; text-align: center; font-size: 14px }
 .strokes input.miss { border-color: var(--warn); background: var(--warn-soft) }
 ul.plain { margin: 0; padding-left: 1.2em } ul.plain li { margin: 2px 0 }
+.stars { color: var(--gold); letter-spacing: .08em; font-size: 15px; white-space: nowrap }
+.gsum { display: grid; gap: 0 }
+.gsum > div { display: grid; grid-template-columns: 8.5em 6.5em minmax(0, 1fr); gap: 4px 14px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: baseline }
+.gsum > div:last-child { border-bottom: 0 }
+.gsum b { font-family: var(--f-display); font-size: 16px }
+.gsum p { margin: 0; font-size: 14px }
+@media (max-width: 600px) { .gsum > div { grid-template-columns: auto minmax(0, 1fr) } .gsum p { grid-column: 1 / -1 } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chips a { font-size: 13px; padding: 3px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; background: var(--paper) }
+.chips a:hover { border-color: var(--gold) }
+.fac { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px }
+.fac li { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 10px }
+.fac .sys { font-size: 12px; color: var(--ink-2); padding-top: 2px }
+.advice { background: var(--gold-soft); border-radius: 8px; padding: 10px 14px; font-size: 14.5px }
+.advice b { color: var(--gold) }
+.mbar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle }
+td.c { text-align: center; white-space: nowrap }
+tr.now td { background: var(--gold-soft) }
 .foot { margin-top: 30px; font-size: 12px; color: var(--mid); max-width: 90ch }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease } }
 </style>
@@ -158,6 +176,7 @@ ul.plain { margin: 0; padding-left: 1.2em } ul.plain li { margin: 2px 0 }
 <script>/*STROKES*/</script>
 <script>/*ENGINE*/</script>
 <script>/*DATA*/</script>
+<script>/*GENRE*/</script>
 <script>
 (function () {
 'use strict';
@@ -211,6 +230,7 @@ function compute(inp) {
   R.nu = U.numerology(P, inp.romaji, Y);
   R.se = inp.sei && inp.mei ? U.seimei(inp.sei, inp.mei, overrides, inp.reisu) : null;
   R.ma = U.maya(P);
+  R.G = window.UGenre.analyze(R, D);
   return R;
 }
 
@@ -259,20 +279,21 @@ function synth(R) {
 }
 
 // ---------- 描画 ----------
-const TABS = [['sogo', '総合判定'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
+const TABS = [['sogo', '総合判定'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
 let current = 'sogo';
 try { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h)) current = h; } catch (e) { }
 
 function render(R) {
   const S = synth(R);
   const panes = {
-    sogo: paneSogo(R, S), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
+    sogo: paneSogo(R, S), genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
     rokusei: paneRoku(R), gosei: paneGosei(R), num: paneNum(R), seimei: paneSeimei(R), shuku: paneShuku(R), basis: paneBasis(R)
   };
   $('out').innerHTML = `<div class="tabs" role="tablist">${TABS.map(([k, n]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${k === current}" data-k="${k}">${n}</button>`).join('')}</div>` +
     TABS.map(([k]) => `<section class="pane" role="tabpanel" id="pane-${k}" ${k === current ? '' : 'hidden'}>${panes[k]}</section>`).join('');
   $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); }));
   $('out').querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); $('tab-' + a.dataset.goto).click(); window.scrollTo({ top: $('out').offsetTop - 10 }); }));
+  $('out').querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const el = $(a.dataset.jump); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
   const st = $('strokeEdit'); if (st) st.addEventListener('change', e => { const c = e.target.dataset.c; if (c) { if (e.target.value) overrides[c] = +e.target.value; else delete overrides[c]; run(); } });
 }
 
@@ -289,6 +310,8 @@ function paneSogo(R, S) {
       <div><h2>${name}の${R.Y}年は「${S.level[0]}」</h2><p class="lead">${S.level[1]} 判定に使った${S.rows.filter(r => r.score !== null).length}占術のうち、好調寄り ${S.pos}・注意寄り ${S.neg}・平常 ${S.rows.filter(r => r.score === 0).length}。</p></div>
     </div>
   </div>
+  ${genreSummary(R)}
+  ${cyclesCard(R)}
   <div class="card">
     <h3>複数の占術が共通して示す、あなたの資質</h3>
     <p class="lead" style="margin-bottom:14px">${S.nsys}占術の基本タイプを12の資質に分類し、いくつの占術がその資質を示したかを数えました。最も多くの占術が一致したのは<b>「${D.THEMES[top[0].t]}」</b>${top[1] ? `、次いで<b>「${D.THEMES[top[1].t]}」</b>` : ''}${top[2] ? `と<b>「${D.THEMES[top[2].t]}」</b>` : ''}です。</p>
@@ -306,6 +329,56 @@ function paneSogo(R, S) {
     <div class="card"><h3>あなたの基本タイプ一覧</h3><div class="tablewrap"><table><tbody>${S.src.map(s => `<tr><th>${s.sys}</th><td>${esc(s.label)}</td></tr>`).join('')}${R.go ? '' : '<tr><th>五星三心</th><td><a href="#" data-goto="gosei">命数の入力が必要</a></td></tr>'}</tbody></table></div></div>
   </div>
   ${notes.length ? `<div class="card"><h3>確認が必要な点</h3><ul class="plain">${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}`;
+}
+const STARS = n => `<span class="stars" aria-label="5段階中${n}">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>`;
+const mk = v => v >= 2 ? '◎' : v === 1 ? '○' : v === 0 ? '・' : '△';
+function genreSummary(R) {
+  const G = R.G;
+  const sorted = G.order.map(k => G.genres[k]).slice().sort((a, b) => b.avg - a.avg);
+  return `<div class="card"><h3>${R.Y}年のジャンル別運勢</h3>
+  <p class="lead" style="margin-bottom:6px">最も追い風なのは<b>${sorted[0].name}</b>、慎重に進めたいのは<b>${sorted[sorted.length - 1].name}</b>です。</p>
+  <div class="gsum">${G.order.map(k => { const g = G.genres[k]; return `<div><b>${g.name}</b>${STARS(g.stars)}<p>${esc(g.advice)}${g.bestMonths && g.bestMonths.length ? `<br><span class="hint">好機の月：${g.bestMonths.map(m => m + '月').join('・')}</span>` : ''}</p></div>`; }).join('')}</div>
+  <p class="hint" style="margin-top:6px"><a href="#" data-goto="genre" style="color:var(--indigo)">ジャンルごとの根拠と詳しい見立てを見る</a>　／　<a href="#" data-goto="monthly" style="color:var(--indigo)">月ごとの運勢を見る</a></p></div>`;
+}
+function cyclesCard(R) {
+  const G = R.G, rows = [];
+  const d = G.daiunNow;
+  if (d && d.pre) rows.push(['四柱推命 大運', `まだ最初の大運（${d.from.toFixed(1)}歳〜）に入る前です。`]);
+  else if (d) { const t = D.TSUHEN_YEAR[d.tsuhen]; rows.push(['四柱推命 大運', `<b>${d.name}（${d.tsuhen}・${d.unsei}）</b>　${d.from.toFixed(1)}歳からの10年。${t[0].replace('の年', '')}の10年：${t[1]}`]); }
+  else rows.push(['四柱推命 大運', '性別を入力すると、今いる10年の運（大運）を表示します。']);
+  const tg = G.taigenNow;
+  if (tg) rows.push(['紫微斗数 大限', `<b>${tg.palace}（${tg.branch}）</b>　数え${tg.from}〜${tg.to}歳。${tg.palace.replace('宮', '')}に関わるテーマが中心になる10年${tg.stars.length ? `。宮の主星は${tg.stars.join('・')}（${tg.stars.map(s => D.ZIWEI_TEXT[s][0].split('。')[0]).join('／')}）` : ''}。`]);
+  else if (!R.sb.error) rows.push(['紫微斗数 大限', '性別を入力すると、今いる10年の運（大限）を表示します。']);
+  const ro = R.ro, cyc = [R.Y - 1, R.Y, R.Y + 1].map(y => `${y}年 ${ro.cycleOf(y)}`).join(' → ');
+  rows.push(['六星占術 12年周期', `${cyc}。大殺界は十二支の${ro.daisakkai.join('・')}の年。`]);
+  const tcY = []; for (let y = R.Y; y < R.Y + 12; y++) if (R.sc.kubouIdx.includes(U.mod(y - 4, 12))) tcY.push(y);
+  rows.push(['算命学 天中殺', `${R.sm.tenchusatsu}。次の天中殺は${tcY.slice(0, 2).join('・')}年。`]);
+  return `<div class="card"><h3>いま、あなたがいる長期の流れ（${R.Y}年・${G.age}歳になる年）</h3><div class="tablewrap"><table><tbody>${rows.map(r => `<tr><th>${r[0]}</th><td>${r[1]}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function paneGenre(R) {
+  const G = R.G;
+  const notes = { money: 'お金の判断（投資・借入など）は、占いではなく収支の実態と専門家の助言をもとに行ってください。', health: '東洋医学・占術上の伝統的な対応であり、医学的な診断ではありません。体調の不安は医療機関へ。' };
+  return `<div class="card"><div class="eyebrow">ジャンル別</div><h2>${R.Y}年の金運・仕事運・恋愛運・対人運・健康運</h2>
+    <p class="lead">各ジャンルについて、生まれ持った傾向（命式・ホロスコープ・命盤など）と、${R.Y}年の巡りを占術ごとに並べました。★は${R.Y}年の見立ての平均から算出しています。</p>
+    <div class="chips" style="margin-top:10px">${G.order.map(k => `<a href="#g-${k}" data-jump="g-${k}">${G.genres[k].name}</a>`).join('')}</div></div>
+  ${G.order.map(k => { const g = G.genres[k]; return `<div class="card" id="g-${k}">
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline"><h2 style="margin:0">${g.name}</h2>${STARS(g.stars)}<span class="hint">好調寄り ${g.good}・注意寄り ${g.bad}</span></div>
+    <p class="advice" style="margin:10px 0 0"><b>アドバイス</b>　${esc(g.advice)}${g.bestMonths && g.bestMonths.length ? `<br><b>好機の月</b>　${g.bestMonths.map(m => m + '月').join('・')}（月別運勢から）` : ''}</p>
+    <div class="cols" style="margin-top:14px">
+      <div><h3>生まれ持った傾向</h3><ul class="fac">${g.natal.map(x => `<li><span class="sys">${x.sys}</span><span>${esc(x.text)}</span></li>`).join('')}</ul></div>
+      <div><h3>${R.Y}年の見立て</h3><ul class="fac">${g.year.map(x => `<li><span class="sys">${x.sys}<br>${pill(x.score)}</span><span>${esc(x.text)}</span></li>`).join('')}</ul></div>
+    </div>${notes[k] ? `<p class="hint" style="margin-top:10px">${notes[k]}</p>` : ''}</div>`; }).join('')}`;
+}
+function paneMonthly(R) {
+  const ms = R.G.months, nowM = new Date().getFullYear() === R.Y ? new Date().getMonth() + 1 : null;
+  const col = v => v >= 1 ? 'var(--good)' : v === 0 ? 'var(--indigo)' : 'var(--warn)';
+  const best = [...ms].sort((a, b) => b.score - a.score).filter(m => m.score > 0).slice(0, 3), worst = [...ms].sort((a, b) => a.score - b.score).filter(m => m.score < 0).slice(0, 3);
+  return `<div class="card"><div class="eyebrow">月別運勢</div><h2>${R.Y}年 月ごとの流れ</h2>
+    <p class="lead">${best.length ? `好調な月は<b>${best.map(m => m.m + '月').join('・')}</b>` : '突出して好調な月はありません'}${worst.length ? `、慎重に過ごしたい月は<b>${worst.map(m => m.m + '月').join('・')}</b>` : ''}です。</p>
+    <p class="hint">四柱推命の月の干支（節入りで切り替わり、表は各月15日時点）と、九星気学の月盤で本命星が入る宮を組み合わせています。◎○・△は各ジャンルの目安（本アプリ独自の点数）。</p></div>
+  <div class="card"><div class="tablewrap"><table><thead><tr><th>月</th><th>総合</th><th>月の干支</th><th>九星の宮</th><th class="c">金運</th><th class="c">仕事</th><th class="c">恋愛</th><th>ひとこと</th></tr></thead><tbody>
+  ${ms.map(m => { const t = D.TSUHEN_YEAR[m.tsuhen]; return `<tr class="${m.m === nowM ? 'now' : ''}"><td style="white-space:nowrap"><b>${m.m}月</b></td><td>${pill(m.score)}<br><span class="mbar" style="width:${(m.score + 2) * 12 + 4}px;background:${col(m.score)}"></span></td><td style="white-space:nowrap">${m.name}<br><span class="hint">${m.tsuhen}・${m.unsei}${m.kubou ? '・天中殺月' : ''}</span></td><td style="white-space:nowrap">${m.palName}</td><td class="c">${mk(m.money)}</td><td class="c">${mk(m.work)}</td><td class="c">${mk(m.love)}</td><td style="min-width:16em"><b>${t[0].replace('の年', '')}</b>　${t[1].split('。')[0]}。九星では${D.PALACE_YEAR[m.palace][1].split('。')[0]}。${m.kubou ? '天中殺の月なので、新しい契約や大きな決断は慎重に。' : ''}</td></tr>`; }).join('')}
+  </tbody></table></div></div>`;
 }
 function luckHints(R) {
   const el = R.sc.element, min = Math.min(...el);
@@ -469,7 +542,8 @@ function paneBasis(R) {
     <li>九星気学：年は立春、月は節入りで区切る。吉方位は本命星基準の簡易判定。</li>
     <li>姓名判断：新字体画数・81数の吉凶は一般的な目安。ひらがな・カタカナの画数にも流派差あり。</li>
     <li>マヤ暦：ドリームスペル方式（2013年7月26日＝KIN164を基準）。</li>
-    <li>総合判定の点数づけと資質の分類は、本アプリ独自の集計方法です。</li></ul></div>
+    <li>総合判定・ジャンル別・月別の点数づけと資質の分類は、本アプリ独自の集計方法です（財星＝金運、官星＝仕事・女性の恋愛、財星＝男性の恋愛、木星の通過ハウス、紫微斗数の流年四化の入る宮など、各占術で一般的な対応をもとにしています）。</li>
+    <li>月別運勢：月の区切りは節入り。表は各月15日時点の月柱と九星月盤で判定。</li></ul></div>
   <div class="card"><h3>3. 確認が必要な部分</h3><ul class="plain">
     <li>五星三心占い：命数の算出方法は非公開のため自動計算していません（公式の命数表で確認が必要）。</li>
     <li>出生時刻の正確さ：母子手帳などの記録時刻でも数分の誤差はあり得ます。境目の近くで生まれた場合は表示される注意をご確認ください。</li>

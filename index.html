@@ -104,6 +104,24 @@ th { font-weight: 500; color: var(--ink-2); font-size: 12.5px; white-space: nowr
 .strokes input { width: 4em; text-align: center; font-size: 14px }
 .strokes input.miss { border-color: var(--warn); background: var(--warn-soft) }
 ul.plain { margin: 0; padding-left: 1.2em } ul.plain li { margin: 2px 0 }
+.stars { color: var(--gold); letter-spacing: .08em; font-size: 15px; white-space: nowrap }
+.gsum { display: grid; gap: 0 }
+.gsum > div { display: grid; grid-template-columns: 8.5em 6.5em minmax(0, 1fr); gap: 4px 14px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: baseline }
+.gsum > div:last-child { border-bottom: 0 }
+.gsum b { font-family: var(--f-display); font-size: 16px }
+.gsum p { margin: 0; font-size: 14px }
+@media (max-width: 600px) { .gsum > div { grid-template-columns: auto minmax(0, 1fr) } .gsum p { grid-column: 1 / -1 } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chips a { font-size: 13px; padding: 3px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; background: var(--paper) }
+.chips a:hover { border-color: var(--gold) }
+.fac { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px }
+.fac li { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 10px }
+.fac .sys { font-size: 12px; color: var(--ink-2); padding-top: 2px }
+.advice { background: var(--gold-soft); border-radius: 8px; padding: 10px 14px; font-size: 14.5px }
+.advice b { color: var(--gold) }
+.mbar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle }
+td.c { text-align: center; white-space: nowrap }
+tr.now td { background: var(--gold-soft) }
 .foot { margin-top: 30px; font-size: 12px; color: var(--mid); max-width: 90ch }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .5s ease } }
 </style>
@@ -668,7 +686,23 @@ ul.plain { margin: 0; padding-left: 1.2em } ul.plain li { margin: 2px 0 }
     return { kin, seal: (kin - 1) % 20, tone: (kin - 1) % 13 + 1, feb29: isFeb29 };
   }
 
-  const api = { STEMS, BRANCHES, ELN, TSUHEN, SHUSEI, JUSEI, UNSEI, KYUSEI, SIGNS, SIGN_GLYPH, PALACES, SHUKU, ROKU_CYCLE, GOSEI, PALACE_DIR, kanshi, mod, jdn, fromJdn, dayIndex, prepare, shichu, annualShichu, sanmei, rokusei, gosei, kyusei, kyuseiYear, toLunar, lunarYearMonths, shibi, shibiYear, sukuyo, western, westernYear, angles, numerology, seimei, loadStrokes, strokeOf, maya, fmtJst, eclLon, signOf, fmtDeg, risshun, honmeiOf };
+  // ---------- 月ごとの運勢（指定日時の月柱・月盤） ----------
+  function monthAt(sc, ky, date) {
+    const y0 = date.getUTCFullYear();
+    const gy = date < risshun(y0) ? y0 - 1 : y0; // 立春年
+    const yIdx = mod(gy - 4, 60);
+    const mOff = Math.floor(mod(sunLon(date) - 315, 360) / 30); // 0=寅月
+    const mBr = mod(2 + mOff, 12), mStem = mod((yIdx % 10) * 2 + 2 + mOff, 10);
+    const idx = idxFromSB(mStem, mBr);
+    const hon = honmeiOf(gy);
+    const start = [1, 4, 7].includes(hon) ? 8 : [3, 6, 9].includes(hon) ? 5 : 2;
+    const center = n9(start - mOff);
+    const ds = sc.dayStem;
+    return { name: kanshi(idx), stem: mStem, branch: mBr, tsuhen: TSUHEN[tsuhen(ds, mStem)], unsei: UNSEI[unsei(ds, mBr)], kubou: sc.kubouIdx.includes(mBr), center, palace: palaceOf(ky.honmei, center), yearStem: yIdx % 10 };
+  }
+  const tsuhenOf = (ds, s) => TSUHEN[tsuhen(ds, s)];
+
+  const api = { monthAt, tsuhenOf, palaceOf, BR_EL, STEM_EL, STEMS, BRANCHES, ELN, TSUHEN, SHUSEI, JUSEI, UNSEI, KYUSEI, SIGNS, SIGN_GLYPH, PALACES, SHUKU, ROKU_CYCLE, GOSEI, PALACE_DIR, kanshi, mod, jdn, fromJdn, dayIndex, prepare, shichu, annualShichu, sanmei, rokusei, gosei, kyusei, kyuseiYear, toLunar, lunarYearMonths, shibi, shibiYear, sukuyo, western, westernYear, angles, numerology, seimei, loadStrokes, strokeOf, maya, fmtJst, eclLon, signOf, fmtDeg, risshun, honmeiOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Uranai = api;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -870,6 +904,251 @@ ul.plain { margin: 0; padding-left: 1.2em } ul.plain li { margin: 2px 0 }
 
 </script>
 <script>
+/* ジャンル別（金運・仕事運・恋愛運・対人運・健康運）と月別運勢の分析。
+ * 各占術の一般的な象意をもとに、本アプリ独自の規則で点数と文章を組み立てる。 */
+(function (root) {
+  'use strict';
+  const U = root.Uranai;
+
+  // [金運, 仕事運, 恋愛運]
+  const SIGN_G = [
+    ['稼ぐのも使うのも速い。勝負所で一気に動くタイプ', '先頭に立って新しい分野を切り開く仕事', '直球で追いかける情熱的な恋。熱しやすく冷めやすい面に注意'],
+    ['着実に貯め、価値ある物にだけ使う堅実派', '品質と継続が評価される専門職・ものづくり', '時間をかけて信頼を育てる一途な愛'],
+    ['情報と人脈から複数の収入源をつくる', '情報発信・営業・企画など変化の多い仕事', '会話が弾む相手に惹かれる軽やかな恋'],
+    ['家族や将来のために備える貯蓄型', '人を守り育てる仕事。チームの母役', '安心感と居場所を求める家庭的な愛'],
+    ['自分を輝かせるものに投資する', '表舞台・リーダー・クリエイティブ職', 'ドラマチックで情熱的。誇りを大切にする恋'],
+    ['予算管理が得意な計画派', '正確さが求められる実務・分析・専門職', '尽くす愛。理想の高さで慎重になりがち'],
+    ['美しいものと人付き合いにお金を使う', '交渉・調整・デザインなど対人とセンスの仕事', '対等なパートナーシップを重視'],
+    ['一点集中で資産を深く育てる', '研究・調査・金融など深く掘り下げる仕事', '深く濃い絆を求める。独占欲に注意'],
+    ['経験・学び・旅にお金を使う', '海外・教育・出版など視野を広げる仕事', '自由を尊重し合い、冒険を共有できる恋'],
+    ['長期計画で着実に資産を築く', '組織の中で責任ある立場に昇っていく', '誠実で長続きする、結婚を見据えた恋'],
+    ['新しい仕組みやテクノロジーで稼ぐ', 'IT・研究・社会活動など独創性を生かす仕事', '友情から始まる自由で対等な関係'],
+    ['お金に執着しにくく、人のために使う', '芸術・医療福祉・癒やしなど共感力を生かす仕事', 'ロマンチックで献身的。自分の境界線を意識すると吉'],
+  ];
+  const PARTNER = ['行動的で情熱的な', '穏やかで堅実な', '話し上手で好奇心旺盛な', '家庭的で面倒見のよい', '華やかで自信のある', '誠実で几帳面な', '社交的で洗練された', '一途で深い愛情を持つ', '自由で前向きな', '責任感が強く頼れる', '個性的で自立した', 'やさしく包容力のある'];
+  const ZIWEI_G = {
+    '紫微': ['地位とともに財が付く。見栄の出費に注意', '管理職・経営向き', '理想が高く、尊敬できる相手を選ぶ'],
+    '天機': ['知恵で稼ぐ。収入は変動しやすい', '企画・参謀・IT・コンサル', '頭の回転が合う相手。考えすぎに注意'],
+    '太陽': ['稼いでも人のために使いがち', '公務・教育・人前に立つ仕事', '明るくおおらか。尽くしすぎに注意'],
+    '武曲': ['財星の代表。実務と決断で財を築く', '金融・経営・技術職', '不器用だが誠実。仕事優先になりがち'],
+    '天同': ['苦労少なく楽しく稼ぐ。散財に注意', 'サービス・福祉・楽しみを届ける仕事', '穏やかで癒やし合う関係'],
+    '廉貞': ['こだわりの分野で稼ぐ', '法律・政治・美容・専門技術', '情熱的。嫉妬や駆け引きに注意'],
+    '天府': ['蓄財の星。守りに強い', '管理・経理・不動産・大組織', '安定志向で包容力のある関係'],
+    '太陰': ['不動産や貯蓄で財を蓄える', '文化・美・デザイン・裏方の専門職', '繊細でロマンチック。やさしい相手と縁'],
+    '貪狼': ['社交と才芸で財を得る', '営業・芸能・飲食・エンタメ', '異性運が強く華やか。誘惑に注意'],
+    '巨門': ['話す力で稼ぐ', '講師・営業・法律・評論など言葉の仕事', '言葉の行き違いに注意。対話を大切に'],
+    '天相': ['人の助けで安定収入', '秘書・補佐・調整役・公務', '誠実で穏やか。相手を立てる'],
+    '天梁': ['堅実で、年長者からの援助も', '医療・教育・相談役', '年上や包容力のある相手と縁'],
+    '七殺': ['大きく稼ぎ大きく動く', '起業・営業・スポーツ・現場の指揮', '激しい恋。衝突を和らげる工夫を'],
+    '破軍': ['浮き沈みが大きい。投機は慎重に', '改革・新規事業・技術革新', '刺激を求める恋。変化の多い関係'],
+  };
+  const KYUSEI_G = [
+    ['お金は流れるように出入りする。貯める仕組みづくりが鍵', '人脈と粘り強さで裏方から頭角を現す', '情が深く、縁を大切にする'],
+    ['こつこつ貯める堅実派', '補佐・サポート・育成で真価を発揮', '尽くす愛。家庭運が安定'],
+    ['若いうちから稼ぐ力がある。勢いの浪費に注意', '新規事業・発信・営業', '積極的なアプローチが実る'],
+    ['信用が財を呼ぶ。取引運がよい', '調整・交渉・貿易・営業', '縁談に恵まれやすい。優柔不断に注意'],
+    ['大きく稼ぐ力と大きな出費の両極', 'トップ・独立・経営', '面倒見がよい。支配的にならないよう注意'],
+    ['稼ぐ力は強いが気前もよい', '管理職・リーダー・公的な仕事', 'プライドが高く、尊敬し合える関係を重視'],
+    ['金運の星。楽しみにも惜しまず使う', '接客・飲食・金融・話す仕事', '社交的で人気がある。遊びすぎに注意'],
+    ['不動産・相続など蓄財に縁がある', '継承・改革・不動産・専門職', '慎重だが、一度決めると堅い'],
+    ['名誉が財を連れてくる。出入りは激しめ', '美・芸術・教育・メディア', '情熱的で華やか。冷めやすさに注意'],
+  ];
+  const ROKU_G = [
+    ['計画的で堅実。見栄の出費を避ける', '理想と信念を貫く研究・専門職', '精神的なつながりを重視'],
+    ['稼ぐのも使うのも好き', '好きなことを仕事にする自由業・芸術', '恋愛体質。感情の起伏に注意'],
+    ['好きなことには惜しまず使う', '独自の世界観を生かす専門職', '束縛を嫌う自立した関係'],
+    ['人の縁からお金が入る', '人と関わる営業・サービス', '情に厚く尽くす。寂しがり'],
+    ['堅実に貯める', '組織で信頼を積み上げる', '家庭的で誠実'],
+    ['お金の感覚が鋭く投資の才もある', '交渉・金融・ビジネス', '現実的な相手選び'],
+  ];
+  const NUM_G = {
+    1: ['自分で稼ぐ独立型', 'リーダー・起業', '主導権を握りたい恋'], 2: ['パートナーと築く協力型', '補佐・調整・カウンセリング', '寄り添い合う関係'],
+    3: ['楽しさが収入源になる', '表現・発信・エンタメ', '楽しく明るい恋'], 4: ['計画的な蓄財', '管理・技術・事務', '誠実で安定した関係'],
+    5: ['変化の多い収入。機会に強い', '営業・旅行・メディア', '刺激と自由を求める恋'], 6: ['家族のために使う', '教育・医療・美・サービス', '責任感のある深い愛'],
+    7: ['専門性で稼ぐ', '研究・分析・専門職', '一人の時間も尊重する関係'], 8: ['大きく稼ぐ力', '経営・金融・管理職', '対等で力強いパートナー'],
+    9: ['人のために使うと巡ってくる', '社会貢献・国際・芸術', '包容力のある大きな愛'], 11: ['直感が金運を左右する', '教育・カウンセリング・創作', '深い共感を求める'],
+    22: ['大きな事業で財を築く', '事業構築・建築・社会的プロジェクト', '現実的に支え合う関係'], 33: ['奉仕が巡って豊かさになる', '癒やし・教育・福祉', '無償の愛。尽くしすぎに注意'],
+  };
+  const SPOUSE = {
+    '比肩': '対等で友達のような夫婦関係。互いの自立を尊重すると長続き', '劫財': '情熱的だが主導権争いが起きやすい。役割分担を決めておくと吉',
+    '食神': '穏やかで楽しい家庭を築きやすい。相手に癒やされる', '傷官': '相手への要求が高くなりがち。言葉選びに配慮を',
+    '偏財': '社交的で魅力のある相手と縁。マンネリ防止が鍵', '正財': '堅実で家庭を大切にする相手と縁',
+    '偏官': '刺激的で行動的な相手と縁。衝突は早めの話し合いで', '正官': '誠実で社会的信用のある相手と縁',
+    '偏印': '個性的な相手と縁。干渉しすぎない距離感が吉', '印綬': '面倒見がよく包容力のある相手と縁',
+  };
+  const SHUSEI_LOVE = {
+    '貫索星': 'マイペースな配偶者観。互いの領域を守る関係', '石門星': '仲間のように協力し合う関係', '鳳閣星': '一緒に楽しめるおおらかな関係',
+    '調舒星': '繊細な感性を分かち合える相手を求める', '禄存星': '愛情深く尽くし合う関係', '司禄星': '家庭的で堅実な関係',
+    '車騎星': '行動的でさっぱりした関係', '牽牛星': '品位と責任を重んじる関係', '龍高星': '自由で刺激のある関係', '玉堂星': '知的で落ち着いた関係',
+  };
+  const SHUSEI_SOCIAL = {
+    '貫索星': '狭く深く。信頼した相手とは長く付き合う', '石門星': '誰とでもフラットにつながる人脈づくりの名人', '鳳閣星': '場を和ませるムードメーカー',
+    '調舒星': '少人数で深い関係を好む', '禄存星': '人を引きつけ面倒を見る親分肌', '司禄星': '身近な人を大切にする', '車騎星': 'さっぱりした付き合い。率直さが誤解を生むことも',
+    '牽牛星': '礼儀を重んじ、目上に引き立てられる', '龍高星': '旅先や異文化の縁が広がる', '玉堂星': '師弟・先輩後輩の縁に恵まれる',
+  };
+  const ELEMENT_HEALTH = ['肝・胆、目、筋', '心・小腸、血流', '脾・胃、消化器', '肺・大腸、呼吸器・皮膚', '腎・膀胱、骨・耳'];
+  const SIHUA = [['廉貞', '破軍', '武曲', '太陽'], ['天機', '天梁', '紫微', '太陰'], ['天同', '天機', '文昌', '廉貞'], ['太陰', '天同', '天機', '巨門'], ['貪狼', '太陰', '右弼', '天機'], ['武曲', '貪狼', '天梁', '文曲'], ['太陽', '武曲', '太陰', '天同'], ['巨門', '太陽', '文曲', '文昌'], ['天梁', '紫微', '左輔', '武曲'], ['破軍', '巨門', '太陰', '貪狼']];
+
+  const GENRES = [
+    ['money', '金運'], ['work', '仕事運'], ['love', '恋愛・結婚運'], ['social', '対人運'], ['health', '健康運'],
+  ];
+  const ADVICE = {
+    money: ['出費や損失が出やすい流れです。高額な買い物、保証人、よく知らない投資話は見送り、予備資金を厚めに。', '大きな勝負より、固定費の見直しやお金の流れの見える化で足場を固めると吉。', '収入を増やす行動（昇給の相談・副業・価格の見直し・新しい販路）に動く好機。入った分の一部を先に確保しておくと、好調を蓄えに変えられます。'],
+    work: ['対立や働きすぎに注意。重要な決断は情報を集めてから。成果より信頼の維持を優先すると吉。', '今の場所でのスキル磨きと実績づくりに向く時期。次の飛躍の準備期間です。', '新しい役割・プロジェクト・転職活動など、前に出る行動が評価されやすい時期。'],
+    love: ['すれ違いや誤解が起きやすい流れ。即断せず、話し合いの時間を多めに取って。', '今の関係を丁寧に育てる時期。予定の共有や小さな感謝の言葉が効きます。', '出会いの場に出る、気持ちを伝えるなど自分から動くと縁が育ちやすい。パートナーがいれば将来の話を進める好機。'],
+    social: ['トラブルや誤解に巻き込まれやすい時期。約束、お金の貸し借り、SNSでの発言に注意。', '身近な人間関係を大切に。新しい集まりは無理せず選んで参加を。', '紹介や再会から良縁が広がる時期。会いたい人に自分から連絡を。'],
+    health: ['無理が体に出やすい時期とされます。睡眠を優先し、定期健診を受け、気になる症状があれば早めに医療機関へ。', '生活リズムを整えることが運気の土台に。食事と睡眠の時間を一定に。', '活動量を上げやすい時期。新しい運動習慣を始めるのに向いています。'],
+  };
+
+  const grp = t => ({ '比肩': 'hiko', '劫財': 'hiko', '食神': 'shoku', '傷官': 'shoku', '偏財': 'zai', '正財': 'zai', '偏官': 'kan', '正官': 'kan', '偏印': 'in', '印綬': 'in' }[t]);
+  const clamp = (v, a = -2, b = 2) => Math.max(a, Math.min(b, v));
+  const KANKA = { 0: 9, 4: 9, 8: 9, 2: 3, 6: 3, 10: 3, 5: 6, 9: 6, 1: 6, 11: 0, 3: 0, 7: 0 }; // 咸池（桃花）
+  const EKIBA = { 0: 2, 4: 2, 8: 2, 2: 8, 6: 8, 10: 8, 5: 11, 9: 11, 1: 11, 11: 5, 3: 5, 7: 5 }; // 駅馬
+
+  function starPalace(sb, star) { if (!sb || sb.error) return null; return sb.palaces.find(p => p.stars.some(s => s.replace(/化.$/, '') === star)) || null; }
+  const palaceByName = (sb, n) => sb.palaces.find(p => p.name === n);
+  const mainOf = (sb, n) => { const p = palaceByName(sb, n); if (p.main.length) return { stars: p.main, borrowed: false, p }; const o = sb.palaces.find(x => x.bIdx === (p.bIdx + 6) % 12); return { stars: o.main, borrowed: true, p }; };
+
+  function analyze(R, D) {
+    const sc = R.sc, w = R.w, Y = R.Y, sex = R.inp.sex, timeKnown = R.inp.hh !== null;
+    const tc = sc.tcount, cnt = g => Object.entries(tc).filter(([k]) => grp(k) === g).reduce((a, [, v]) => a + v, 0);
+    const C = { hiko: cnt('hiko'), shoku: cnt('shoku'), zai: cnt('zai'), kan: cnt('kan'), in: cnt('in') };
+    const dayBr = sc.pillars[2].branch, yearBr = sc.pillars[0].branch;
+    const kanka = [KANKA[dayBr], KANKA[yearBr]], ekiba = [EKIBA[dayBr], EKIBA[yearBr]];
+    const natalBr = sc.pillars.filter(Boolean).map(p => p.branch);
+    const loveStar = sex === 'm' ? 'zai' : sex === 'f' ? 'kan' : null;
+    const yb = U.mod(Y - 4, 12), ys = U.mod(Y - 4, 10);
+    const venus = w.planets[3], mars = w.planets[4], jup = w.planets[5];
+    const ang = w.angles;
+    const houseSign = h => ang ? U.signOf(ang.cusps[h - 1]) : null;
+    const planetsIn = h => ang ? w.planets.slice(0, 10).filter(p => p.house === h).map(p => p.name) : [];
+    const jupH = R.wY.jupiter.map(s => R.wY.houseFromSun(s)), satH = R.wY.saturn.map(s => R.wY.houseFromSun(s));
+    const yearSihua = SIHUA[ys];
+    const out = {};
+    const G = k => (out[k] = { natal: [], year: [] });
+    GENRES.forEach(([k]) => G(k));
+    const N = (k, sys, text) => out[k].natal.push({ sys, text });
+    const Yr = (k, sys, text, score) => out[k].year.push({ sys, text, score });
+
+    // ===== 金運 =====
+    N('money', '四柱推命', C.zai >= 2 ? `財星（偏財・正財）が${C.zai}つあり、お金を動かす才能があります。${C.zai >= 3 ? '財が多すぎると出入りも激しくなるため、守りの仕組みを。' : '商才や人脈を収入につなげやすい命式です。'}` : C.zai === 1 ? '財星が1つ。収入源を一本に頼らず、得意分野を軸に少しずつ増やすと安定します。' : `命式に財星がありません。お金への執着は薄めで、${C.shoku ? '食神・傷官（技術や表現）を通じて財を生む形' : '仕組み化（自動積立など）で守る形'}が向いています。`);
+    if (C.shoku >= 2 && C.zai) N('money', '四柱推命', '食傷（才能）が財を生む「食傷生財」の流れがあり、技術・作品・アイデアが収入になりやすい形です。');
+    if (C.hiko >= 3) N('money', '四柱推命', '比肩・劫財が多く、交際費や人への出費がかさみやすい傾向。共同出資や貸し借りは慎重に。');
+    N('money', '西洋占星術', ang ? `お金のハウス（第2室）は${U.SIGNS[houseSign(2)]}：${SIGN_G[houseSign(2)][0]}${planetsIn(2).length ? `。第2室に${planetsIn(2).join('・')}があります` : ''}。` : `金星（価値観）は${venus.signName}：${SIGN_G[venus.sign][0]}。（出生時刻があるとお金のハウスまで読めます）`);
+    if (R.sb && !R.sb.error) { const m = mainOf(R.sb, '財帛宮'); N('money', '紫微斗数', `財帛宮${m.borrowed ? '（主星がないため対宮から借用）' : ''}に${m.stars.join('・') || '主星なし'}：${m.stars.map(s => ZIWEI_G[s][0]).join('。')}。`); const lu = starPalace(R.sb, R.sb.sihua[0]); if (lu) N('money', '紫微斗数', `生まれ年の化禄（${R.sb.sihua[0]}化禄）は${lu.name}にあり、${lu.name.replace('宮', '')}に関わる分野が豊かさの源になりやすいとされます。`); }
+    N('money', '九星気学', `${R.ky.honmeiName}：${KYUSEI_G[R.ky.honmei - 1][0]}。`);
+    N('money', '六星占術', `${R.ro.star}人：${ROKU_G[R.ro.starIdx][0]}。`);
+    N('money', '数秘術', `ライフパス${R.nu.lifePath}：${NUM_G[R.nu.lifePath][0]}。`);
+    const b = R.sm.body; if (['禄存星', '司禄星'].some(s => Object.values(b).includes(s))) N('money', '算命学', `人体星図に財の星（${['禄存星', '司禄星'].filter(s => Object.values(b).includes(s)).join('・')}）があり、${Object.values(b).includes('禄存星') ? '人を引きつけてお金を回す力' : '蓄える力'}を持っています。`);
+    // 金運・年運
+    const yt = R.scY.tsuhen, yg = grp(yt);
+    Yr('money', '四柱推命', `${R.scY.name}年は${yt}の年。` + ({ zai: yt === '偏財' ? '動きのある財運。副収入や人脈経由の話が増える一方、広げすぎに注意。' : '堅実な収入と蓄えに追い風。', hiko: yt === '劫財' ? '出費や分け前の争いに注意。共同での出資・貸し借りは慎重に。' : '自力で稼ぐ力は上がるが、出費も増えやすい。', shoku: yt === '食神' ? '楽しみながら稼げる流れ。才能が収入につながりやすい。' : 'アイデアや技術が収入を生む一方、衝動的な出費に注意。', kan: '責任や役割に伴う出費が増えやすい。収入は地位とともについてくる。', in: '学びや資格への投資が後で回収される年。' }[yg]), { zai: yt === '偏財' ? 1 : 2, hiko: yt === '劫財' ? -2 : -1, shoku: yt === '食神' ? 1 : 0, kan: 0, in: 0 }[yg]);
+    const jm = jupH.some(h => h === 2 || h === 8) ? 1 : 0;
+    Yr('money', '西洋占星術', `木星が太陽星座から${jupH.join('→')}番目を通過${jm ? '。お金のハウス（2番目・8番目）にあたり、収入・資産面の拡大期' : '。金運のハウスには入らない配置'}。`, jm);
+    if (R.sb && !R.sb.error) { const L = starPalace(R.sb, yearSihua[0]), J = starPalace(R.sb, yearSihua[3]); let s = 0, t = `${Y}年（${U.STEMS[ys]}年）の化禄は${yearSihua[0]}（${L ? L.name : '—'}）、化忌は${yearSihua[3]}（${J ? J.name : '—'}）。`; if (L && ['財帛宮', '田宅宮'].includes(L.name)) { s += 1; t += 'お金の宮に化禄が入り、財の巡りがよい年。'; } if (J && ['財帛宮', '田宅宮'].includes(J.name)) { s -= 1; t += 'お金の宮に化忌が入り、出費や資金繰りに注意。'; } Yr('money', '紫微斗数', t, s); }
+    const cyc = R.ro.cycleOf(Y); Yr('money', '六星占術', `運気は「${cyc}」。` + ({ '財成': '金運が最も伸びる年。', '安定': '収入が安定する好調期。', '達成': '努力が成果として返る年。', '陰影': '大殺界。大きなお金の判断は先送りが無難。', '停止': '大殺界。新規の投資や借入は控えて。', '減退': '大殺界。出費の見直しを。' }[cyc] || '大きな浮き沈みは少ない年。'), { '財成': 2, '安定': 1, '達成': 1, '陰影': -2, '停止': -2, '減退': -2, '乱気': -1, '健弱': -1 }[cyc] || 0);
+    Yr('money', '九星気学', `本命星は${D.PALACE_YEAR[R.kyY.palace][0]}。` + (R.kyY.palace === 7 ? '金運・楽しみ事に恵まれる配置。' : R.kyY.palace === 1 || R.kyY.palace === 5 ? 'お金の動きは控えめにしたい配置。' : '金運面は大きな偏りのない配置。'), R.kyY.palace === 7 ? 2 : R.kyY.palace === 1 || R.kyY.palace === 5 ? -1 : 0);
+    if (R.nu.personalYear === 8) Yr('money', '数秘術', 'パーソナルイヤー8は達成と収穫の年。金運にも追い風。', 1);
+
+    // ===== 仕事運 =====
+    const topGrp = Object.entries(C).sort((a, b) => b[1] - a[1])[0][0];
+    N('work', '四柱推命', { kan: `官星（正官・偏官）が${C.kan}つと多く、組織の中で責任ある立場を担うと力を発揮するタイプ。`, in: `印星が${C.in}つと多く、学び・資格・知識を武器にするタイプ。研究・教育・専門職に向きます。`, shoku: `食神・傷官が${C.shoku}つと多く、技術・表現・アイデアで勝負するタイプ。職人・クリエイター・企画職に向きます。`, zai: `財星が${C.zai}つと多く、商売・営業・お金を動かす仕事に向くタイプ。`, hiko: `比肩・劫財が${C.hiko}つと多く、独立・自営や仲間と組む働き方に向くタイプ。` }[topGrp]);
+    if (natalBr.some(x => ekiba.includes(x))) N('work', '四柱推命', '命式に駅馬（移動の星）があり、出張・転勤・海外など動きのある働き方で運が開けます。');
+    N('work', '西洋占星術', ang ? `天職を示すMC（天頂）は${U.SIGNS[w.mcSign]}：${SIGN_G[w.mcSign][1]}が向いています。${planetsIn(10).length ? `第10室に${planetsIn(10).join('・')}があり、仕事が人生の大きなテーマになります。` : ''}` : `太陽星座${w.planets[0].signName}から見ると、${SIGN_G[w.planets[0].sign][1]}が向いています。（出生時刻があると天職のMCまで読めます）`);
+    if (R.sb && !R.sb.error) { const m = mainOf(R.sb, '官禄宮'); N('work', '紫微斗数', `官禄宮${m.borrowed ? '（対宮から借用）' : ''}に${m.stars.join('・') || '主星なし'}：${m.stars.map(s => ZIWEI_G[s][1]).join('、')}に向きます。`); }
+    N('work', '算命学', `仕事の姿勢を表す腹（南）の星は${b.south}：${D.SHUSEI_TEXT[b.south][0]}`);
+    N('work', '九星気学', `${R.ky.honmeiName}の適職：${KYUSEI_G[R.ky.honmei - 1][1]}。`);
+    N('work', '数秘術', `ライフパス${R.nu.lifePath}の適職：${NUM_G[R.nu.lifePath][1]}。`);
+    N('work', '六星占術', `${R.ro.star}人の適職：${ROKU_G[R.ro.starIdx][1]}。`);
+    Yr('work', '四柱推命', `${yt}の年。` + ({ kan: yt === '正官' ? '評価・昇進・信用に恵まれやすい。ルールを守り誠実に動くほど吉。' : '責任や重圧が増えるが、果敢に動けば突破口に。無理は禁物。', in: '学び・資格取得・異動の準備に向く年。目上の援助も。', shoku: '企画・創作・技術の腕が冴える年。ただし上司への言葉選びに注意。', zai: '営業成績や取引に追い風。仕事の成果が収入に直結しやすい。', hiko: '独立・自営・新しい挑戦に向く年。協調を忘れずに。' }[yg]), { kan: yt === '正官' ? 2 : 0, in: 1, shoku: 0, zai: 1, hiko: yt === '比肩' ? 0 : -1 }[yg]);
+    if (ekiba.includes(yb)) Yr('work', '四柱推命', `${Y}年は駅馬の年。転勤・出張・転職など動きが出やすい。`, 0);
+    const jw = jupH.includes(10) ? 2 : jupH.includes(6) ? 1 : 0, sw = satH.includes(10) ? -1 : 0;
+    Yr('work', '西洋占星術', `木星は太陽星座から${jupH.join('→')}番目${jupH.includes(10) ? '（仕事・社会的地位のハウス）で、キャリアの飛躍期' : jupH.includes(6) ? '（日々の仕事のハウス）で、職場環境が整う時期' : ''}。土星は${satH.join('→')}番目${sw ? '（仕事のハウス）で、責任と試練が増える時期' : ''}。`, clamp(jw + sw));
+    if (R.sb && !R.sb.error) { const L = starPalace(R.sb, yearSihua[0]), Q = starPalace(R.sb, yearSihua[1]), J = starPalace(R.sb, yearSihua[3]); let s = 0, t = ''; if (L && L.name === '官禄宮' || Q && Q.name === '官禄宮') { s++; t += `官禄宮に化${L && L.name === '官禄宮' ? '禄' : '権'}が入り、仕事で成果や権限を得やすい年。`; } if (J && J.name === '官禄宮') { s--; t += '官禄宮に化忌が入り、仕事上の行き違いに注意。'; } if (t) Yr('work', '紫微斗数', t, s); }
+    Yr('work', '九星気学', `${D.PALACE_YEAR[R.kyY.palace][0]}。` + ({ 3: '発展期で、新しい仕事が軌道に乗りやすい。', 6: '責任が増え多忙だが、引き立ても得られる。', 9: '才能が注目される一方、隠れた問題も表に出やすい。', 5: '動きにくい年。現状維持と内部固めを。', 1: '充電期。資格や準備に時間を使うと吉。', 8: '転職・方向転換が起こりやすい変化の年。' }[R.kyY.palace] || '仕事面は着実に進められる配置。'), { 3: 2, 6: 1, 9: 0, 5: -1, 1: -1, 8: 0, 4: 1, 2: 0, 7: 0 }[R.kyY.palace]);
+    Yr('work', '六星占術', `「${cyc}」の年。` + ({ '達成': '目標を達成しやすい年。', '立花': '活動が広がる年。', '再会': '過去の縁や経験が仕事で生きる年。', '健弱': '体調に配慮して無理をしない年。', '乱気': '判断ミスに注意。', '陰影': '大殺界。新規事業や転職は慎重に。', '停止': '大殺界。大きな決断は避けて。', '減退': '大殺界。守りに徹して。' }[cyc] || '着実に積み上げる年。'), { '達成': 2, '立花': 1, '再会': 1, '安定': 1, '緑生': 1, '健弱': -1, '乱気': -1, '陰影': -2, '停止': -2, '減退': -2 }[cyc] || 0);
+
+    // ===== 恋愛・結婚運 =====
+    const spT = sc.pillars[2].hidden[0].tsuhen;
+    N('love', '四柱推命', `配偶者を表す日支（${U.BRANCHES[dayBr]}）の星は${spT}：${SPOUSE[spT]}。`);
+    if (loveStar) { const n = C[loveStar]; N('love', '四柱推命', `${sex === 'm' ? '男性にとって女性・妻を表す財星' : '女性にとって男性・夫を表す官星'}は${n}つ。${n === 0 ? '縁は自分から作りに行くと実りやすいタイプ。' : n >= 3 ? '異性の縁が多く、選び方が鍵になるタイプ。' : 'ほどよく縁に恵まれるバランス型。'}`); }
+    if (natalBr.some(x => kanka.includes(x))) N('love', '四柱推命', '命式に桃花（咸池）があり、異性を惹きつける魅力があるとされます。');
+    N('love', '西洋占星術', `恋愛観を示す金星は${venus.signName}：${SIGN_G[venus.sign][2]}。行動力の火星は${mars.signName}。${ang ? `結婚のハウス（第7室）は${U.SIGNS[houseSign(7)]}で、${PARTNER[houseSign(7)]}相手と縁がありそうです。` : ''}`);
+    if (R.sb && !R.sb.error) { const m = mainOf(R.sb, '夫妻宮'); N('love', '紫微斗数', `夫妻宮${m.borrowed ? '（対宮から借用）' : ''}に${m.stars.join('・') || '主星なし'}：${m.stars.map(s => ZIWEI_G[s][2]).join('。')}。`); }
+    N('love', '算命学', `配偶者を表す左手（西）の星は${b.west}：${SHUSEI_LOVE[b.west]}。`);
+    N('love', '九星気学', `${R.ky.honmeiName}：${KYUSEI_G[R.ky.honmei - 1][2]}。`);
+    N('love', '数秘術', `ライフパス${R.nu.lifePath}：${NUM_G[R.nu.lifePath][2]}。`);
+    if (loveStar) { const hit = yg === loveStar; Yr('love', '四柱推命', `${yt}の年。` + (hit ? `${sex === 'm' ? '財星' : '官星'}が巡り、異性との縁が動きやすい年。出会い・交際・結婚の話が進みやすい。` : yg === 'hiko' ? 'ライバルの出現や自己主張のぶつかり合いに注意。' : yg === 'shoku' ? '楽しむ気持ちが魅力を高める年。' : '恋愛面の大きな変化は少なめ。'), hit ? 2 : yg === 'hiko' ? -1 : yg === 'shoku' ? 1 : 0); }
+    else Yr('love', '四柱推命', '性別が未回答のため、異性の星による判定は省略しています。', null);
+    if (kanka.includes(yb)) Yr('love', '四柱推命', `${Y}年は桃花（咸池）の年。人気運が高まり出会いが増えやすい。`, 1);
+    const jl = jupH.some(h => h === 5 || h === 7) ? 2 : 0;
+    Yr('love', '西洋占星術', `木星が太陽星座から${jupH.join('→')}番目を通過${jl ? '。恋愛（5番目）・結婚（7番目）のハウスにあたり、出会いと関係の発展期' : '。恋愛のハウスには入らない配置'}。`, jl);
+    if (R.sb && !R.sb.error) { const L = starPalace(R.sb, yearSihua[0]), J = starPalace(R.sb, yearSihua[3]); let s = 0, t = ''; if (L && L.name === '夫妻宮') { s += 2; t += '夫妻宮に化禄が入り、恋愛・結婚に恵まれやすい年。'; } if (J && J.name === '夫妻宮') { s -= 1; t += '夫妻宮に化忌が入り、パートナーとのすれ違いに注意。'; } if (t) Yr('love', '紫微斗数', t, s); }
+    Yr('love', '九星気学', `${D.PALACE_YEAR[R.kyY.palace][0]}。` + ({ 4: '縁談・恋愛がまとまりやすい配置。', 9: '出会いもあるが別れも起こりうる配置。', 7: '楽しい出会いが増える配置。', 1: '秘めた恋や深い関係が育つ配置。', 5: '関係を急がず育てたい配置。' }[R.kyY.palace] || '恋愛面は落ち着いた配置。'), { 4: 2, 7: 1, 9: 0, 1: 0, 5: -1 }[R.kyY.palace] || 0);
+    Yr('love', '六星占術', `「${cyc}」の年。` + (['陰影', '停止', '減退'].includes(cyc) ? '大殺界中の結婚・入籍は避けるのが六星占術の考え方。' : ['再会', '緑生', '立花', '安定'].includes(cyc) ? '縁が育ちやすい年。' : ''), ['陰影', '停止', '減退'].includes(cyc) ? -2 : ['再会', '緑生', '立花', '安定'].includes(cyc) ? 1 : 0);
+
+    // ===== 対人運 =====
+    N('social', '算命学', `社会や友人を表す右手（東）の星は${b.east}：${SHUSEI_SOCIAL[b.east]}。`);
+    N('social', '四柱推命', C.hiko >= 2 ? `比肩・劫財が${C.hiko}つあり、仲間意識が強い一方、張り合いも生まれやすい。` : C.in >= 2 ? '印星が多く、目上や師に引き立てられやすい。' : '人間関係は自然体。相手との距離感を自分で決めていけるタイプ。');
+    if (R.sb && !R.sb.error) { const m = mainOf(R.sb, '交友宮'); N('social', '紫微斗数', `交友宮${m.borrowed ? '（対宮から借用）' : ''}に${m.stars.join('・') || '主星なし'}。${m.stars.map(s => D.ZIWEI_TEXT[s][0]).join(' ')}`); }
+    N('social', '西洋占星術', `太陽${w.planets[0].signName}・月${w.planets[1].signName}の組み合わせ。${D.SIGN_TEXT[w.planets[0].sign][1]}`);
+    const inTc = sc.kubouIdx.includes(yb);
+    Yr('social', '算命学', inTc ? `${R.sm.tenchusatsu}の年。人間関係の入れ替わりが起きやすく、新しい縁は慎重に見極めたい時期。` : '天中殺ではなく、人間関係を広げやすい年。', inTc ? -1 : 1);
+    Yr('social', '四柱推命', `${yt}の年。` + ({ hiko: '仲間・同僚との関わりが増える。競争心が強くなりすぎないよう注意。', in: '目上や師からの援助を受けやすい。', kan: '上下関係や責任の中で人間関係が試される。', shoku: '人を楽しませる力が高まる。言葉が鋭くならないよう注意。', zai: '社交の機会が増え、人脈が広がる。' }[yg]), { hiko: yt === '劫財' ? -1 : 0, in: 1, kan: 0, shoku: 0, zai: 1 }[yg]);
+    Yr('social', '九星気学', `${D.PALACE_YEAR[R.kyY.palace][0]}。` + ({ 4: '信用と縁が広がる配置。', 7: '交際が増え楽しい付き合いが多い配置。', 9: '人の出入りが激しく、別れも起こりうる配置。', 8: '人間関係が入れ替わる変化の配置。' }[R.kyY.palace] || '人間関係は安定した配置。'), { 4: 2, 7: 1, 9: -1, 8: -1 }[R.kyY.palace] || 0);
+
+    // ===== 健康運 =====
+    const el = sc.element, mx = Math.max(...el), mn = Math.min(...el);
+    const ex = el.map((v, i) => v === mx ? i : -1).filter(i => i >= 0), lk = el.map((v, i) => v === mn ? i : -1).filter(i => i >= 0);
+    N('health', '四柱推命', `五行では${ex.map(i => U.ELN[i]).join('・')}が強く、${lk.map(i => U.ELN[i]).join('・')}が弱めです。東洋医学の伝統的な対応では、弱い五行は${lk.map(i => ELEMENT_HEALTH[i]).join('／')}にあたり、ここをいたわる生活が養生になるとされます。`);
+    if (ang && planetsIn(6).length) N('health', '西洋占星術', `健康・日常のハウス（第6室）に${planetsIn(6).join('・')}があり、生活習慣の整え方が運気を左右します。`);
+    Yr('health', '四柱推命', `${yt}・${R.scY.unsei}の年。` + (yt === '偏官' ? 'プレッシャーやケガに注意したい星回り。' : ['病', '死', '絶'].includes(R.scY.unsei) ? 'エネルギーが落ちやすい十二運。休息を意識して。' : ['帝旺', '建禄', '冠帯'].includes(R.scY.unsei) ? 'エネルギーが高い十二運。ただし働きすぎに注意。' : '大きな偏りのない星回り。'), yt === '偏官' ? -1 : ['病', '死', '絶'].includes(R.scY.unsei) ? -1 : ['帝旺', '建禄', '冠帯'].includes(R.scY.unsei) ? 1 : 0);
+    Yr('health', '六星占術', `「${cyc}」の年。` + (cyc === '健弱' ? '小殺界で体調を崩しやすい年とされます。' : ['陰影', '停止', '減退'].includes(cyc) ? '大殺界。心身の疲れに注意。' : '体調面は安定しやすい年。'), cyc === '健弱' ? -2 : ['陰影', '停止', '減退'].includes(cyc) ? -1 : 1);
+    Yr('health', '九星気学', `${D.PALACE_YEAR[R.kyY.palace][0]}。` + ({ 1: '冷えと疲れに注意したい配置。', 5: '持病の再発や体調の変化に注意したい配置。', 2: '胃腸をいたわりたい配置。' }[R.kyY.palace] || '体調面は大きな注意点の少ない配置。'), { 1: -1, 5: -1, 2: 0 }[R.kyY.palace] || 0);
+    const satSun = satH.some(h => [1, 4, 7, 10].includes(h));
+    Yr('health', '西洋占星術', satSun ? '土星が太陽星座と緊張角をとる時期を含み、疲れがたまりやすい。' : '土星との緊張角がなく、体力面の圧力は少ない配置。', satSun ? -1 : 0);
+
+    // ===== 点数と★ =====
+    GENRES.forEach(([k, name]) => {
+      const g = out[k], sc2 = g.year.filter(x => x.score !== null);
+      const avg = sc2.length ? sc2.reduce((a, x) => a + x.score, 0) / sc2.length : 0;
+      g.name = name; g.avg = avg;
+      g.stars = avg >= 1.1 ? 5 : avg >= 0.45 ? 4 : avg > -0.3 ? 3 : avg > -0.9 ? 2 : 1;
+      g.advice = ADVICE[k][g.stars >= 4 ? 2 : g.stars === 3 ? 1 : 0];
+      g.good = sc2.filter(x => x.score > 0).length; g.bad = sc2.filter(x => x.score < 0).length;
+    });
+
+    // ===== 月別 =====
+    const months = [];
+    for (let m = 1; m <= 12; m++) {
+      const d = new Date(Date.UTC(Y, m - 1, 15, 3));
+      const mi = U.monthAt(sc, R.ky, d), g = grp(mi.tsuhen);
+      const pal = D.PALACE_YEAR[mi.palace];
+      const base = D.TSUHEN_YEAR[mi.tsuhen][2] + (D.UNSEI_SCORE[mi.unsei] || 0) + pal[2] + (mi.kubou ? -1 : 0);
+      const money = (g === 'zai' ? 2 : mi.tsuhen === '食神' ? 1 : mi.tsuhen === '劫財' ? -1 : 0) + (mi.palace === 7 ? 1 : mi.palace === 1 || mi.palace === 5 ? -1 : 0);
+      const work = (mi.tsuhen === '正官' ? 2 : g === 'kan' || g === 'in' ? 1 : 0) + ([3, 6].includes(mi.palace) ? 1 : [1, 5].includes(mi.palace) ? -1 : 0) + (mi.kubou ? -1 : 0);
+      const love = (loveStar ? (g === loveStar ? 2 : 0) : (g === 'zai' || g === 'kan' ? 1 : 0)) + (kanka.includes(mi.branch) ? 1 : 0) + (mi.palace === 4 ? 2 : mi.palace === 9 || mi.palace === 7 ? 1 : 0);
+      months.push({ m, ...mi, score: clamp(base), money, work, love, palName: pal[0].split('＝')[0] });
+    }
+    const pick = key => { const top = [...months].sort((a, b) => b[key] - a[key]); const best = top[0][key]; return best > 0 ? top.filter(x => x[key] === best).slice(0, 3).map(x => x.m) : []; };
+    out.money.bestMonths = pick('money'); out.work.bestMonths = pick('work'); out.love.bestMonths = pick('love');
+    out.social.bestMonths = []; out.health.bestMonths = [];
+
+    // ===== 長期の流れ =====
+    const age = Y - R.P.y;
+    let daiunNow = null;
+    if (sc.daiun) { const l = sc.daiun.list; for (const x of l) if (age >= x.from && age < x.from + 10) daiunNow = x; if (!daiunNow && age < l[0].from) daiunNow = { pre: true, from: l[0].from }; }
+    let taigenNow = null;
+    if (R.sb && !R.sb.error && R.sb.taigen) { const kazoe = Y - R.lu.year + 1; taigenNow = R.sb.taigen.find(t => kazoe >= t.from && kazoe <= t.to) || null; if (taigenNow) taigenNow = { ...taigenNow, kazoe, stars: palaceByName(R.sb, taigenNow.palace).main }; }
+
+    return { genres: out, months, daiunNow, taigenNow, age, order: GENRES.map(g => g[0]) };
+  }
+  root.UGenre = { analyze, GENRES };
+  if (typeof module !== 'undefined' && module.exports) module.exports = root.UGenre;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
 (function () {
 'use strict';
 const U = window.Uranai, D = window.UData;
@@ -922,6 +1201,7 @@ function compute(inp) {
   R.nu = U.numerology(P, inp.romaji, Y);
   R.se = inp.sei && inp.mei ? U.seimei(inp.sei, inp.mei, overrides, inp.reisu) : null;
   R.ma = U.maya(P);
+  R.G = window.UGenre.analyze(R, D);
   return R;
 }
 
@@ -970,20 +1250,21 @@ function synth(R) {
 }
 
 // ---------- 描画 ----------
-const TABS = [['sogo', '総合判定'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
+const TABS = [['sogo', '総合判定'], ['genre', 'ジャンル別'], ['monthly', '月別運勢'], ['shichu', '四柱推命'], ['sanmei', '算命学'], ['western', '西洋占星術'], ['shibi', '紫微斗数'], ['kyusei', '九星気学'], ['rokusei', '六星占術'], ['gosei', '五星三心'], ['num', '数秘術'], ['seimei', '姓名判断'], ['shuku', '宿曜・マヤ暦'], ['basis', '計算の根拠']];
 let current = 'sogo';
 try { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h)) current = h; } catch (e) { }
 
 function render(R) {
   const S = synth(R);
   const panes = {
-    sogo: paneSogo(R, S), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
+    sogo: paneSogo(R, S), genre: paneGenre(R), monthly: paneMonthly(R), shichu: paneShichu(R), sanmei: paneSanmei(R), western: paneWestern(R), shibi: paneShibi(R), kyusei: paneKyusei(R),
     rokusei: paneRoku(R), gosei: paneGosei(R), num: paneNum(R), seimei: paneSeimei(R), shuku: paneShuku(R), basis: paneBasis(R)
   };
   $('out').innerHTML = `<div class="tabs" role="tablist">${TABS.map(([k, n]) => `<button class="tab" role="tab" id="tab-${k}" aria-selected="${k === current}" data-k="${k}">${n}</button>`).join('')}</div>` +
     TABS.map(([k]) => `<section class="pane" role="tabpanel" id="pane-${k}" ${k === current ? '' : 'hidden'}>${panes[k]}</section>`).join('');
   $('out').querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { current = b.dataset.k; $('out').querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b)); TABS.forEach(([k]) => $('pane-' + k).hidden = k !== current); }));
   $('out').querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); $('tab-' + a.dataset.goto).click(); window.scrollTo({ top: $('out').offsetTop - 10 }); }));
+  $('out').querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const el = $(a.dataset.jump); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
   const st = $('strokeEdit'); if (st) st.addEventListener('change', e => { const c = e.target.dataset.c; if (c) { if (e.target.value) overrides[c] = +e.target.value; else delete overrides[c]; run(); } });
 }
 
@@ -1000,6 +1281,8 @@ function paneSogo(R, S) {
       <div><h2>${name}の${R.Y}年は「${S.level[0]}」</h2><p class="lead">${S.level[1]} 判定に使った${S.rows.filter(r => r.score !== null).length}占術のうち、好調寄り ${S.pos}・注意寄り ${S.neg}・平常 ${S.rows.filter(r => r.score === 0).length}。</p></div>
     </div>
   </div>
+  ${genreSummary(R)}
+  ${cyclesCard(R)}
   <div class="card">
     <h3>複数の占術が共通して示す、あなたの資質</h3>
     <p class="lead" style="margin-bottom:14px">${S.nsys}占術の基本タイプを12の資質に分類し、いくつの占術がその資質を示したかを数えました。最も多くの占術が一致したのは<b>「${D.THEMES[top[0].t]}」</b>${top[1] ? `、次いで<b>「${D.THEMES[top[1].t]}」</b>` : ''}${top[2] ? `と<b>「${D.THEMES[top[2].t]}」</b>` : ''}です。</p>
@@ -1017,6 +1300,56 @@ function paneSogo(R, S) {
     <div class="card"><h3>あなたの基本タイプ一覧</h3><div class="tablewrap"><table><tbody>${S.src.map(s => `<tr><th>${s.sys}</th><td>${esc(s.label)}</td></tr>`).join('')}${R.go ? '' : '<tr><th>五星三心</th><td><a href="#" data-goto="gosei">命数の入力が必要</a></td></tr>'}</tbody></table></div></div>
   </div>
   ${notes.length ? `<div class="card"><h3>確認が必要な点</h3><ul class="plain">${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}`;
+}
+const STARS = n => `<span class="stars" aria-label="5段階中${n}">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>`;
+const mk = v => v >= 2 ? '◎' : v === 1 ? '○' : v === 0 ? '・' : '△';
+function genreSummary(R) {
+  const G = R.G;
+  const sorted = G.order.map(k => G.genres[k]).slice().sort((a, b) => b.avg - a.avg);
+  return `<div class="card"><h3>${R.Y}年のジャンル別運勢</h3>
+  <p class="lead" style="margin-bottom:6px">最も追い風なのは<b>${sorted[0].name}</b>、慎重に進めたいのは<b>${sorted[sorted.length - 1].name}</b>です。</p>
+  <div class="gsum">${G.order.map(k => { const g = G.genres[k]; return `<div><b>${g.name}</b>${STARS(g.stars)}<p>${esc(g.advice)}${g.bestMonths && g.bestMonths.length ? `<br><span class="hint">好機の月：${g.bestMonths.map(m => m + '月').join('・')}</span>` : ''}</p></div>`; }).join('')}</div>
+  <p class="hint" style="margin-top:6px"><a href="#" data-goto="genre" style="color:var(--indigo)">ジャンルごとの根拠と詳しい見立てを見る</a>　／　<a href="#" data-goto="monthly" style="color:var(--indigo)">月ごとの運勢を見る</a></p></div>`;
+}
+function cyclesCard(R) {
+  const G = R.G, rows = [];
+  const d = G.daiunNow;
+  if (d && d.pre) rows.push(['四柱推命 大運', `まだ最初の大運（${d.from.toFixed(1)}歳〜）に入る前です。`]);
+  else if (d) { const t = D.TSUHEN_YEAR[d.tsuhen]; rows.push(['四柱推命 大運', `<b>${d.name}（${d.tsuhen}・${d.unsei}）</b>　${d.from.toFixed(1)}歳からの10年。${t[0].replace('の年', '')}の10年：${t[1]}`]); }
+  else rows.push(['四柱推命 大運', '性別を入力すると、今いる10年の運（大運）を表示します。']);
+  const tg = G.taigenNow;
+  if (tg) rows.push(['紫微斗数 大限', `<b>${tg.palace}（${tg.branch}）</b>　数え${tg.from}〜${tg.to}歳。${tg.palace.replace('宮', '')}に関わるテーマが中心になる10年${tg.stars.length ? `。宮の主星は${tg.stars.join('・')}（${tg.stars.map(s => D.ZIWEI_TEXT[s][0].split('。')[0]).join('／')}）` : ''}。`]);
+  else if (!R.sb.error) rows.push(['紫微斗数 大限', '性別を入力すると、今いる10年の運（大限）を表示します。']);
+  const ro = R.ro, cyc = [R.Y - 1, R.Y, R.Y + 1].map(y => `${y}年 ${ro.cycleOf(y)}`).join(' → ');
+  rows.push(['六星占術 12年周期', `${cyc}。大殺界は十二支の${ro.daisakkai.join('・')}の年。`]);
+  const tcY = []; for (let y = R.Y; y < R.Y + 12; y++) if (R.sc.kubouIdx.includes(U.mod(y - 4, 12))) tcY.push(y);
+  rows.push(['算命学 天中殺', `${R.sm.tenchusatsu}。次の天中殺は${tcY.slice(0, 2).join('・')}年。`]);
+  return `<div class="card"><h3>いま、あなたがいる長期の流れ（${R.Y}年・${G.age}歳になる年）</h3><div class="tablewrap"><table><tbody>${rows.map(r => `<tr><th>${r[0]}</th><td>${r[1]}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function paneGenre(R) {
+  const G = R.G;
+  const notes = { money: 'お金の判断（投資・借入など）は、占いではなく収支の実態と専門家の助言をもとに行ってください。', health: '東洋医学・占術上の伝統的な対応であり、医学的な診断ではありません。体調の不安は医療機関へ。' };
+  return `<div class="card"><div class="eyebrow">ジャンル別</div><h2>${R.Y}年の金運・仕事運・恋愛運・対人運・健康運</h2>
+    <p class="lead">各ジャンルについて、生まれ持った傾向（命式・ホロスコープ・命盤など）と、${R.Y}年の巡りを占術ごとに並べました。★は${R.Y}年の見立ての平均から算出しています。</p>
+    <div class="chips" style="margin-top:10px">${G.order.map(k => `<a href="#g-${k}" data-jump="g-${k}">${G.genres[k].name}</a>`).join('')}</div></div>
+  ${G.order.map(k => { const g = G.genres[k]; return `<div class="card" id="g-${k}">
+    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline"><h2 style="margin:0">${g.name}</h2>${STARS(g.stars)}<span class="hint">好調寄り ${g.good}・注意寄り ${g.bad}</span></div>
+    <p class="advice" style="margin:10px 0 0"><b>アドバイス</b>　${esc(g.advice)}${g.bestMonths && g.bestMonths.length ? `<br><b>好機の月</b>　${g.bestMonths.map(m => m + '月').join('・')}（月別運勢から）` : ''}</p>
+    <div class="cols" style="margin-top:14px">
+      <div><h3>生まれ持った傾向</h3><ul class="fac">${g.natal.map(x => `<li><span class="sys">${x.sys}</span><span>${esc(x.text)}</span></li>`).join('')}</ul></div>
+      <div><h3>${R.Y}年の見立て</h3><ul class="fac">${g.year.map(x => `<li><span class="sys">${x.sys}<br>${pill(x.score)}</span><span>${esc(x.text)}</span></li>`).join('')}</ul></div>
+    </div>${notes[k] ? `<p class="hint" style="margin-top:10px">${notes[k]}</p>` : ''}</div>`; }).join('')}`;
+}
+function paneMonthly(R) {
+  const ms = R.G.months, nowM = new Date().getFullYear() === R.Y ? new Date().getMonth() + 1 : null;
+  const col = v => v >= 1 ? 'var(--good)' : v === 0 ? 'var(--indigo)' : 'var(--warn)';
+  const best = [...ms].sort((a, b) => b.score - a.score).filter(m => m.score > 0).slice(0, 3), worst = [...ms].sort((a, b) => a.score - b.score).filter(m => m.score < 0).slice(0, 3);
+  return `<div class="card"><div class="eyebrow">月別運勢</div><h2>${R.Y}年 月ごとの流れ</h2>
+    <p class="lead">${best.length ? `好調な月は<b>${best.map(m => m.m + '月').join('・')}</b>` : '突出して好調な月はありません'}${worst.length ? `、慎重に過ごしたい月は<b>${worst.map(m => m.m + '月').join('・')}</b>` : ''}です。</p>
+    <p class="hint">四柱推命の月の干支（節入りで切り替わり、表は各月15日時点）と、九星気学の月盤で本命星が入る宮を組み合わせています。◎○・△は各ジャンルの目安（本アプリ独自の点数）。</p></div>
+  <div class="card"><div class="tablewrap"><table><thead><tr><th>月</th><th>総合</th><th>月の干支</th><th>九星の宮</th><th class="c">金運</th><th class="c">仕事</th><th class="c">恋愛</th><th>ひとこと</th></tr></thead><tbody>
+  ${ms.map(m => { const t = D.TSUHEN_YEAR[m.tsuhen]; return `<tr class="${m.m === nowM ? 'now' : ''}"><td style="white-space:nowrap"><b>${m.m}月</b></td><td>${pill(m.score)}<br><span class="mbar" style="width:${(m.score + 2) * 12 + 4}px;background:${col(m.score)}"></span></td><td style="white-space:nowrap">${m.name}<br><span class="hint">${m.tsuhen}・${m.unsei}${m.kubou ? '・天中殺月' : ''}</span></td><td style="white-space:nowrap">${m.palName}</td><td class="c">${mk(m.money)}</td><td class="c">${mk(m.work)}</td><td class="c">${mk(m.love)}</td><td style="min-width:16em"><b>${t[0].replace('の年', '')}</b>　${t[1].split('。')[0]}。九星では${D.PALACE_YEAR[m.palace][1].split('。')[0]}。${m.kubou ? '天中殺の月なので、新しい契約や大きな決断は慎重に。' : ''}</td></tr>`; }).join('')}
+  </tbody></table></div></div>`;
 }
 function luckHints(R) {
   const el = R.sc.element, min = Math.min(...el);
@@ -1180,7 +1513,8 @@ function paneBasis(R) {
     <li>九星気学：年は立春、月は節入りで区切る。吉方位は本命星基準の簡易判定。</li>
     <li>姓名判断：新字体画数・81数の吉凶は一般的な目安。ひらがな・カタカナの画数にも流派差あり。</li>
     <li>マヤ暦：ドリームスペル方式（2013年7月26日＝KIN164を基準）。</li>
-    <li>総合判定の点数づけと資質の分類は、本アプリ独自の集計方法です。</li></ul></div>
+    <li>総合判定・ジャンル別・月別の点数づけと資質の分類は、本アプリ独自の集計方法です（財星＝金運、官星＝仕事・女性の恋愛、財星＝男性の恋愛、木星の通過ハウス、紫微斗数の流年四化の入る宮など、各占術で一般的な対応をもとにしています）。</li>
+    <li>月別運勢：月の区切りは節入り。表は各月15日時点の月柱と九星月盤で判定。</li></ul></div>
   <div class="card"><h3>3. 確認が必要な部分</h3><ul class="plain">
     <li>五星三心占い：命数の算出方法は非公開のため自動計算していません（公式の命数表で確認が必要）。</li>
     <li>出生時刻の正確さ：母子手帳などの記録時刻でも数分の誤差はあり得ます。境目の近くで生まれた場合は表示される注意をご確認ください。</li>
